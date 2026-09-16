@@ -27,6 +27,43 @@ describe("chooseChannel", () => {
     expect(chooseChannel({ ...reachable, phone: null })).toBe("email");
   });
 
+  describe("when a channel is not configured", () => {
+    // Running email-only is a legitimate setup: Meta business verification takes
+    // weeks, and an email that arrives beats a WhatsApp message that cannot be
+    // sent. What must not happen is routing every creator with a phone number to
+    // a provider that is not connected — that is an outreach run which reaches
+    // nobody and reports success per creator.
+    const emailOnly = { whatsapp: false, email: true };
+
+    it("uses email when WhatsApp is not connected, even with a number on file", () => {
+      expect(chooseChannel(reachable, emailOnly)).toBe("email");
+    });
+
+    it("hands a creator to a person when the only channel we hold is unusable", () => {
+      expect(
+        chooseChannel({ ...reachable, email: null }, emailOnly),
+      ).toBe("manual");
+    });
+
+    it("still returns nothing when there is no way to reach them at all", () => {
+      expect(
+        chooseChannel({ ...reachable, phone: null, email: null }, emailOnly),
+      ).toBeNull();
+    });
+
+    it("uses WhatsApp when email is the channel that is missing", () => {
+      expect(
+        chooseChannel(reachable, { whatsapp: true, email: false }),
+      ).toBe("whatsapp");
+    });
+
+    it("hands over to a person when neither channel is connected", () => {
+      expect(
+        chooseChannel(reachable, { whatsapp: false, email: false }),
+      ).toBe("manual");
+    });
+  });
+
   it("still uses a number found publicly when there is no email", () => {
     expect(
       chooseChannel({ ...reachable, whatsappOptIn: false, email: null }),

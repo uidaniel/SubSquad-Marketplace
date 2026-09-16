@@ -681,3 +681,38 @@ export async function createCampaign(
       : "Campaign created. Fund it when you are ready — nobody is contacted until then.",
   };
 }
+
+/* ==========================================================================
+   AI shortlist
+   ========================================================================== */
+
+/**
+ * Asks the model to rank creators for a campaign.
+ *
+ * Writes suggestions and nothing else — every one still has to be approved by a
+ * person before a creator hears from us. Slow enough to be worth a spinner: the
+ * model reads sixty profiles, which takes a few seconds.
+ */
+export async function runShortlist(
+  campaignId: string,
+): Promise<ActionResult & { live?: boolean }> {
+  try {
+    const { generateShortlist } = await import("@/lib/ai/shortlist");
+    const result = await generateShortlist(campaignId);
+
+    revalidatePath(`/campaigns/${campaignId}/shortlist`);
+    revalidatePath(`/campaigns/${campaignId}`);
+
+    const note = result.live
+      ? ""
+      : " (ranked without AI — no model is configured, so this is ordered by fraud score alone)";
+
+    return {
+      ok: true,
+      live: result.live,
+      message: `${result.created} creator${result.created === 1 ? "" : "s"} suggested${note}. Nobody has been contacted — approve the ones you want first.`,
+    };
+  } catch (error) {
+    return { ok: false, message: (error as Error).message };
+  }
+}

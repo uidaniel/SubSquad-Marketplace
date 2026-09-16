@@ -178,6 +178,43 @@ async function rawCampaigns() {
   return data ?? [];
 }
 
+/**
+ * The brief, from storage into the domain.
+ *
+ * `campaigns.brief` is JSON in snake_case, matching the shape the spec defines
+ * and the shape the AI prompts are written against. The domain type is
+ * camelCase like everything else in the app. Casting between them type-checks
+ * and silently yields undefined at every read, so the conversion is explicit —
+ * and tolerant of both spellings, because rows written before this existed
+ * are in the database already.
+ */
+function toBrief(raw: unknown): Brief {
+  const b = (raw ?? {}) as Record<string, unknown>;
+  const pick = <T,>(snake: string, camel: string, fallback: T): T =>
+    (b[snake] as T) ?? (b[camel] as T) ?? fallback;
+
+  const audience = (b.audience ?? {}) as Record<string, unknown>;
+
+  return {
+    objective: pick("objective", "objective", "awareness") as Brief["objective"],
+    product: pick("product", "product", ""),
+    keyMessages: pick<string[]>("key_messages", "keyMessages", []),
+    mustInclude: pick<string[]>("must_include", "mustInclude", []),
+    mustAvoid: pick<string[]>("must_avoid", "mustAvoid", []),
+    audience: {
+      ageRange: ((audience.age_range ?? audience.ageRange) as [number, number]) ?? [18, 44],
+      gender: ((audience.gender as Brief["audience"]["gender"]) ?? "any"),
+      cities: (audience.cities as string[]) ?? [],
+      languages: (audience.languages as string[]) ?? ["English"],
+    },
+    platforms: pick<string[]>("platforms", "platforms", []),
+    tone: pick("tone", "tone", ""),
+    disclosureTag: pick("disclosure_tag", "disclosureTag", "#ad"),
+    arconCategory: pick("arcon_category", "arconCategory", "general") as Brief["arconCategory"],
+    usageRightsDays: Number(pick("usage_rights_days", "usageRightsDays", 90)),
+  };
+}
+
 function toCampaign(row: Record<string, unknown>): Campaign {
   return {
     id: row.id as string,
@@ -191,7 +228,7 @@ function toCampaign(row: Record<string, unknown>): Campaign {
     agencyMarginBps:
       row.agency_margin_bps === null ? null : Number(row.agency_margin_bps),
     arconCategory: row.arcon_category as Campaign["arconCategory"],
-    brief: row.brief as Brief,
+    brief: toBrief(row.brief),
     rateBandMinKobo: Number(row.rate_band_min_kobo ?? 0),
     rateBandMaxKobo: Number(row.rate_band_max_kobo ?? 0),
     deadline: row.deadline as string,

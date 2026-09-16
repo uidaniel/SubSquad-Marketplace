@@ -25,17 +25,39 @@ export interface CreatorContactState {
 
 export const UNSOLICITED_COOLDOWN_DAYS = 7;
 
+/** Which channels this deployment can actually send on. */
+export interface AvailableChannels {
+  whatsapp: boolean;
+  email: boolean;
+}
+
 /**
  * Which channel to use for a first approach.
  *
  * WhatsApp first is the whole product thesis: it is where Nigerian creators
  * actually reply. Email is the fallback, and when there is neither the deal is
  * handed to a person rather than quietly dropped.
+ *
+ * `available` exists because a channel that is not configured is not a channel.
+ * Routing a creator to WhatsApp because we hold their phone number, when no
+ * WhatsApp account is connected, produces a provider error per creator and an
+ * outreach run that silently reaches nobody. Preferring a channel we can
+ * actually send on is not a compromise — an email that arrives beats a
+ * WhatsApp message that does not.
  */
-export function chooseChannel(contact: CreatorContactState): Channel | null {
-  if (contact.phone && contact.whatsappOptIn) return "whatsapp";
-  if (contact.email) return "email";
-  if (contact.phone) return "whatsapp";
+export function chooseChannel(
+  contact: CreatorContactState,
+  available: AvailableChannels = { whatsapp: true, email: true },
+): Channel | null {
+  const canWhatsApp = available.whatsapp && Boolean(contact.phone);
+  const canEmail = available.email && Boolean(contact.email);
+
+  if (canWhatsApp && contact.whatsappOptIn) return "whatsapp";
+  if (canEmail) return "email";
+  if (canWhatsApp) return "whatsapp";
+  // We hold a way to reach them but cannot use it. That is a configuration
+  // problem for ops to see, not a creator to drop.
+  if (contact.phone || contact.email) return "manual";
   return null;
 }
 
