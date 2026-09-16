@@ -24,6 +24,9 @@ const PUBLIC_PREFIXES = [
   "/d/", // guest brand payment links
   "/payments/", // the post-payment landing page
   "/api/webhooks",
+  // Reachable signed-out on purpose: the misconfiguration it reports is usually
+  // the reason nobody can sign in.
+  "/api/health",
 ];
 
 const DEMO_MODE =
