@@ -15,3 +15,8 @@ playwright-report/
 
 # Trigger.dev
 .trigger
+
+# Playwright saved sessions
+playwright/.auth/
+test-results/
+playwright-report/

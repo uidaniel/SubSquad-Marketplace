@@ -1,0 +1,191 @@
+import "server-only";
+
+import { cache } from "react";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { requireServiceClient } from "@/lib/supabase/service";
+import { env } from "@/lib/env";
+import type { Org, OrgMember } from "@/lib/domain";
+
+/**
+ * Who is asking.
+ *
+ * Every screen resolves the acting org through here. It is wrapped in React's
+ * `cache` so a page that needs the org in four places asks Postgres once per
+ * request rather than four times.
+ *
+ * A user can belong to more than one org — an agency operator who also runs
+ * their own brand. Until an org switcher exists, the earliest membership wins,
+ * which is deterministic and matches what the sidebar shows.
+ */
+
+export interface Session {
+  userId: string;
+  email: string;
+  name: string;
+  org: Org;
+  member: OrgMember;
+}
+
+export const getSession = cache(async (): Promise<Session | null> => {
+  if (env.demoMode) return null;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  // Read through the user's own client so RLS decides what they can see. A
+  // membership row they cannot read is a membership they do not have.
+  const { data: membership } = await supabase
+    .from("org_members")
+    .select("id, org_id, user_id, role, orgs(*)")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!membership?.orgs) return null;
+
+  const orgRow = membership.orgs as unknown as Record<string, unknown>;
+  const name =
+    (user.user_metadata?.name as string | undefined) ??
+    user.email?.split("@")[0] ??
+    "Team member";
+
+  return {
+    userId: user.id,
+    email: user.email ?? "",
+    name,
+    member: {
+      id: membership.id,
+      orgId: membership.org_id,
+      userId: membership.user_id,
+      name,
+      email: user.email ?? "",
+      role: membership.role,
+    },
+    org: {
+      id: orgRow.id as string,
+      type: orgRow.type as Org["type"],
+      name: orgRow.name as string,
+      cacNumber: (orgRow.cac_number as string) ?? null,
+      country: orgRow.country as string,
+      verificationStatus: orgRow.verification_status as Org["verificationStatus"],
+      verifiedAt: (orgRow.verified_at as string) ?? null,
+      defaultMarginBps:
+        orgRow.default_margin_bps === null
+          ? null
+          : Number(orgRow.default_margin_bps),
+    },
+  };
+});
+
+/**
+ * The session, or a redirect.
+ *
+ * Middleware already turns away anyone without a session, so reaching here
+ * without one means the user is authenticated but has no org yet — they signed
+ * up and stopped halfway. They are sent to finish, not to the login page they
+ * have already passed.
+ */
+export async function requireSession(): Promise<Session> {
+  const session = await getSession();
+  if (!session) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    redirect(user ? "/signup/org" : "/login");
+  }
+  return session;
+}
+
+/**
+ * The creator behind this session, if there is one.
+ *
+ * Creators and org members are both `auth.users`; what separates them is which
+ * table points at them. A person can be both — a creator who also runs an
+ * agency — and the app decides by which surface they are on rather than by
+ * giving them a role.
+ */
+export const getSessionCreator = cache(async () => {
+  if (env.demoMode) return null;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("creators")
+    .select("*")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return data ?? null;
+});
+
+/**
+ * Creates an org, its first space, and the founding membership.
+ *
+ * All three or none: a user left with an org they are not a member of cannot
+ * see it, and an org with no space cannot hold money. The service client is
+ * used because at this moment the user is a member of nothing, so RLS would
+ * refuse the very rows that make them a member.
+ */
+export async function createOrgForUser(args: {
+  userId: string;
+  type: "agency" | "brand";
+  name: string;
+  cacNumber?: string | null;
+  firstSpaceName?: string;
+}): Promise<{ orgId: string } | { error: string }> {
+  const db = requireServiceClient();
+
+  const { data: org, error: orgError } = await db
+    .from("orgs")
+    .insert({
+      type: args.type,
+      name: args.name.trim(),
+      cac_number: args.cacNumber?.trim() || null,
+      country: "NG",
+      verification_status: "pending",
+      default_margin_bps: args.type === "agency" ? 1500 : null,
+    })
+    .select("id")
+    .single();
+
+  if (orgError || !org) {
+    return { error: orgError?.message ?? "Could not create the account." };
+  }
+
+  const { error: memberError } = await db.from("org_members").insert({
+    org_id: org.id,
+    user_id: args.userId,
+    role: "owner",
+  });
+
+  if (memberError) {
+    await db.from("orgs").delete().eq("id", org.id);
+    return { error: memberError.message };
+  }
+
+  // A brand works out of one space, its own. An agency starts with one client
+  // space they can rename, because a wallet has to belong to somebody.
+  const { error: spaceError } = await db.from("spaces").insert({
+    org_id: org.id,
+    name: args.firstSpaceName?.trim() || args.name.trim(),
+    is_self: args.type === "brand",
+  });
+
+  if (spaceError) {
+    await db.from("org_members").delete().eq("org_id", org.id);
+    await db.from("orgs").delete().eq("id", org.id);
+    return { error: spaceError.message };
+  }
+
+  return { orgId: org.id };
+}

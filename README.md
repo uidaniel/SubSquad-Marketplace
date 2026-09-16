@@ -119,14 +119,27 @@ reasons, and neither is keepable if the call cannot be found later.
 
 Without `ANTHROPIC_API_KEY` each call returns a stub rather than failing.
 
+## Signing in
+
+Cookie sessions through `@supabase/ssr`. Middleware refreshes the token on every
+request and turns away anyone without a session, verifying it with Supabase
+rather than trusting the cookie.
+
+Every org read now runs **as the signed-in user**, so row-level security decides
+what comes back rather than a `.eq("org_id", …)` somebody might forget. The
+service client is reserved for the three things that must cross an org
+boundary: webhooks, ledger posting, and background jobs.
+
+The seed creates a real account: `ada@kongadigital.ng` / `subsquad-demo`.
+
+Sign-up is two steps — the person, then the company — because agency and brand
+are genuinely different products and the choice deserves a screen rather than a
+radio button.
+
 ## What is not built yet
 
 Honest list, so nobody discovers these by surprise:
 
-- **Auth is not wired to the UI.** The schema, RLS and membership helpers are
-  all in place and the seed creates real `auth.users`, but the app resolves the
-  current org server-side rather than from a session. One function,
-  `currentOrgRow` in `lib/data/supabase-queries.ts`, is the whole change.
 - **Paystack collections** are modelled and the payout path is written, but the
   webhook handler is not yet wired.
 - **Deepgram transcription and frame extraction** are specified in the prompts

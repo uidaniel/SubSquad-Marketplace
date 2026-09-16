@@ -1,6 +1,7 @@
 import "server-only";
 
-import { requireServiceClient } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
+import { requireSession } from "@/lib/auth/session";
 import type {
   Brief,
   Campaign,
@@ -30,71 +31,36 @@ import type { Kobo } from "@/lib/money";
  * rather than passed through raw, which means a column rename touches this file
  * and nothing else.
  *
- * Reads go through the service client and are scoped in the query. RLS is the
- * backstop for anything that reaches Postgres another way — a direct client
- * call, a future mobile app — rather than the only thing standing between two
- * agencies' data.
+ * Reads run as the signed-in user, so row-level security decides what comes
+ * back. Scoping by org in the query is belt and braces; the database is the
+ * belt. Anything that must cross an org boundary — webhooks, ledger posting,
+ * background jobs — uses the service client instead, deliberately.
  */
-
-const db = () => requireServiceClient();
 
 /* ==========================================================================
    Session
    ========================================================================== */
 
 /**
- * The org this request is acting for.
+ * The database, as the signed-in user.
  *
- * Until sign-in is wired through every route, this resolves to the single
- * seeded agency. It is the one piece of this file that is not production
- * behaviour, and it is deliberately in one place so replacing it is a
- * one-function change.
+ * Every read below goes through this, which means row-level security decides
+ * what comes back. Scoping by `org_id` in the query is belt and braces; the
+ * database is the belt.
  */
+const db = async () => createClient();
+
 async function currentOrgRow() {
-  const { data, error } = await db()
-    .from("orgs")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .single();
-  if (error) throw new Error(`no org available: ${error.message}`);
-  return data;
+  const session = await requireSession();
+  return session.org;
 }
 
 export async function getCurrentOrg(): Promise<Org> {
-  const row = await currentOrgRow();
-  return {
-    id: row.id,
-    type: row.type,
-    name: row.name,
-    cacNumber: row.cac_number,
-    country: row.country,
-    verificationStatus: row.verification_status,
-    verifiedAt: row.verified_at,
-    defaultMarginBps: row.default_margin_bps,
-  };
+  return (await requireSession()).org;
 }
 
 export async function getCurrentUser(): Promise<OrgMember> {
-  const org = await currentOrgRow();
-  const { data } = await db()
-    .from("org_members")
-    .select("id, org_id, user_id, role")
-    .eq("org_id", org.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .single();
-
-  const { data: user } = await db().auth.admin.getUserById(data!.user_id);
-
-  return {
-    id: data!.id,
-    orgId: data!.org_id,
-    userId: data!.user_id,
-    name: (user?.user?.user_metadata?.name as string) ?? "Team member",
-    email: user?.user?.email ?? "",
-    role: data!.role,
-  };
+  return (await requireSession()).member;
 }
 
 /* ==========================================================================
@@ -103,7 +69,7 @@ export async function getCurrentUser(): Promise<OrgMember> {
 
 export async function getSpaces(): Promise<Space[]> {
   const org = await currentOrgRow();
-  const { data } = await db()
+  const { data } = await (await db())
     .from("spaces")
     .select("*")
     .eq("org_id", org.id)
@@ -126,7 +92,7 @@ export async function getSpace(spaceId: string): Promise<Space | null> {
 /** Every balance for this org in one query, keyed for cheap lookup. */
 async function balanceIndex() {
   const org = await currentOrgRow();
-  const { data } = await db()
+  const { data } = await (await db())
     .from("v_balances")
     .select("account_id, kind, space_id, campaign_id, creator_id, balance_kobo");
 
@@ -176,7 +142,7 @@ export async function getOrgMoneySummary() {
   const walletsKobo = spaces.reduce((s, sp) => s + (bySpace.get(sp.id) ?? 0), 0);
   const escrowKobo = campaigns.reduce((s, c) => s + (byCampaign.get(c.id) ?? 0), 0);
 
-  const { data: paidDeals } = await db()
+  const { data: paidDeals } = await (await db())
     .from("deals")
     .select("fee_kobo, status, campaign_id")
     .in("status", ["paid", "published"])
@@ -204,7 +170,7 @@ export async function getOrgMoneySummary() {
 
 async function rawCampaigns() {
   const org = await currentOrgRow();
-  const { data } = await db()
+  const { data } = await (await db())
     .from("campaigns")
     .select("*")
     .eq("org_id", org.id)
@@ -234,7 +200,7 @@ function toCampaign(row: Record<string, unknown>): Campaign {
 }
 
 export async function getCampaign(campaignId: string): Promise<Campaign | null> {
-  const { data } = await db()
+  const { data } = await (await db())
     .from("campaigns")
     .select("*")
     .eq("id", campaignId)
@@ -253,14 +219,14 @@ export async function getCampaignSummaries(): Promise<CampaignSummary[]> {
 
   const [{ data: deals }, { data: slots }, { data: shortlist }, { data: pendingMsgs }] =
     await Promise.all([
-      db().from("deals").select("*").in("campaign_id", ids),
-      db().from("campaign_slots").select("*").in("campaign_id", ids),
-      db()
+      (await db()).from("deals").select("*").in("campaign_id", ids),
+      (await db()).from("campaign_slots").select("*").in("campaign_id", ids),
+      (await db())
         .from("shortlist_items")
         .select("campaign_id, status")
         .in("campaign_id", ids)
         .eq("status", "proposed"),
-      db()
+      (await db())
         .from("deal_messages")
         .select("deal_id, ai_draft, sent_at")
         .eq("ai_draft", true)
@@ -476,11 +442,11 @@ async function summarise(dealRows: Record<string, unknown>[]): Promise<DealSumma
 
   const [{ data: creators }, { data: profiles }, { data: scores }, { data: campaigns }] =
     await Promise.all([
-      db().from("creators").select("*").in("id", creatorIds),
-      db().from("creator_profiles").select("*").in("creator_id", creatorIds),
-      db().from("creator_scores").select("*").in("creator_id", creatorIds),
+      (await db()).from("creators").select("*").in("id", creatorIds),
+      (await db()).from("creator_profiles").select("*").in("creator_id", creatorIds),
+      (await db()).from("creator_scores").select("*").in("creator_id", creatorIds),
       campaignIds.length
-        ? db().from("campaigns").select("*").in("id", campaignIds)
+        ? (await db()).from("campaigns").select("*").in("id", campaignIds)
         : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     ]);
 
@@ -508,7 +474,7 @@ async function summarise(dealRows: Record<string, unknown>[]): Promise<DealSumma
 }
 
 export async function getDealsForCampaign(campaignId: string): Promise<DealSummary[]> {
-  const { data } = await db()
+  const { data } = await (await db())
     .from("deals")
     .select("*")
     .eq("campaign_id", campaignId)
@@ -517,7 +483,7 @@ export async function getDealsForCampaign(campaignId: string): Promise<DealSumma
 }
 
 export async function getDeal(dealId: string): Promise<DealSummary | null> {
-  const { data } = await db().from("deals").select("*").eq("id", dealId).maybeSingle();
+  const { data } = await (await db()).from("deals").select("*").eq("id", dealId).maybeSingle();
   if (!data) return null;
   return (await summarise([data]))[0] ?? null;
 }
@@ -537,14 +503,14 @@ function toMessage(row: Record<string, unknown>): DealMessage {
 }
 
 export async function getMessagesForCampaign(campaignId: string) {
-  const { data: deals } = await db()
+  const { data: deals } = await (await db())
     .from("deals")
     .select("*")
     .eq("campaign_id", campaignId);
   const summaries = await summarise(deals ?? []);
   const byId = new Map(summaries.map((s) => [s.deal.id, s]));
 
-  const { data: messages } = await db()
+  const { data: messages } = await (await db())
     .from("deal_messages")
     .select("*")
     .in(
@@ -573,14 +539,14 @@ function toDraft(row: Record<string, unknown>): Draft {
 }
 
 export async function getDraftsForCampaign(campaignId: string) {
-  const { data: deals } = await db()
+  const { data: deals } = await (await db())
     .from("deals")
     .select("*")
     .eq("campaign_id", campaignId);
   const summaries = await summarise(deals ?? []);
   const byId = new Map(summaries.map((s) => [s.deal.id, s]));
 
-  const { data: drafts } = await db()
+  const { data: drafts } = await (await db())
     .from("drafts")
     .select("*")
     .in(
@@ -595,7 +561,7 @@ export async function getDraftsForCampaign(campaignId: string) {
 }
 
 export async function getPendingMessageDrafts() {
-  const { data: messages } = await db()
+  const { data: messages } = await (await db())
     .from("deal_messages")
     .select("*")
     .eq("ai_draft", true)
@@ -604,7 +570,7 @@ export async function getPendingMessageDrafts() {
 
   if (!messages?.length) return [];
 
-  const { data: deals } = await db()
+  const { data: deals } = await (await db())
     .from("deals")
     .select("*")
     .in("id", [...new Set(messages.map((m) => m.deal_id))]);
@@ -617,7 +583,7 @@ export async function getPendingMessageDrafts() {
 }
 
 export async function getShortlist(campaignId: string) {
-  const { data: items } = await db()
+  const { data: items } = await (await db())
     .from("shortlist_items")
     .select("*")
     .eq("campaign_id", campaignId)
@@ -628,9 +594,9 @@ export async function getShortlist(campaignId: string) {
 
   const creatorIds = items.map((i) => i.creator_id);
   const [{ data: creators }, { data: profiles }, { data: scores }] = await Promise.all([
-    db().from("creators").select("*").in("id", creatorIds),
-    db().from("creator_profiles").select("*").in("creator_id", creatorIds),
-    db().from("creator_scores").select("*").in("creator_id", creatorIds),
+    (await db()).from("creators").select("*").in("id", creatorIds),
+    (await db()).from("creator_profiles").select("*").in("creator_id", creatorIds),
+    (await db()).from("creator_scores").select("*").in("creator_id", creatorIds),
   ]);
 
   const creatorById = new Map((creators ?? []).map((c) => [c.id, toCreator(c)]));
@@ -659,13 +625,13 @@ export async function getShortlist(campaignId: string) {
 export async function getCreators() {
   const [{ data: creators }, { data: profiles }, { data: scores }, { byCreator }] =
     await Promise.all([
-      db().from("creators").select("*").order("display_name"),
-      db().from("creator_profiles").select("*"),
-      db().from("creator_scores").select("*"),
+      (await db()).from("creators").select("*").order("display_name"),
+      (await db()).from("creator_profiles").select("*"),
+      (await db()).from("creator_scores").select("*"),
       balanceIndex(),
     ]);
 
-  const { data: deals } = await db().from("deals").select("creator_id");
+  const { data: deals } = await (await db()).from("deals").select("creator_id");
   const dealCounts = new Map<string, number>();
   for (const d of deals ?? []) {
     dealCounts.set(d.creator_id, (dealCounts.get(d.creator_id) ?? 0) + 1);
@@ -689,7 +655,7 @@ export async function getCreators() {
 }
 
 export async function getTransactions(limit = 50) {
-  const { data: transactions } = await db()
+  const { data: transactions } = await (await db())
     .from("ledger_transactions")
     .select("*")
     .order("created_at", { ascending: false })
@@ -697,7 +663,7 @@ export async function getTransactions(limit = 50) {
 
   if (!transactions?.length) return [];
 
-  const { data: entries } = await db()
+  const { data: entries } = await (await db())
     .from("ledger_entries")
     .select("transaction_id, account_id, amount_kobo")
     .in(
@@ -705,7 +671,7 @@ export async function getTransactions(limit = 50) {
       transactions.map((t) => t.id),
     );
 
-  const { data: accounts } = await db()
+  const { data: accounts } = await (await db())
     .from("ledger_accounts")
     .select("id, kind, org_id, space_id, creator_id, campaign_id, deal_id, currency");
   const accountById = new Map((accounts ?? []).map((a) => [a.id, a]));

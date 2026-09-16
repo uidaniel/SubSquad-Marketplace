@@ -18,6 +18,7 @@ import {
 import { cn, initialsOf } from "@/lib/utils";
 import { formatNaira } from "@/lib/money";
 import { NAV_TOGGLE_EVENT } from "./mobile-nav-button";
+import { SignOutButton } from "./sign-out";
 
 /**
  * The rail.
@@ -216,10 +217,7 @@ export function Sidebar({
 
         <div className="my-3 h-px bg-white/10" />
 
-        <button
-          type="button"
-          className="flex w-full items-center gap-2.5 rounded-[7px] px-2.5 py-1.5 text-left transition-colors hover:bg-white/5"
-        >
+        <div className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5">
           <span className="grid size-7 shrink-0 place-items-center rounded-full bg-ok text-[11px] font-semibold text-white">
             {initialsOf(userName)}
           </span>
@@ -229,8 +227,8 @@ export function Sidebar({
               {userRole}
             </span>
           </span>
-          <ChevronDown className="size-4 shrink-0 text-chrome-ink/50" />
-        </button>
+          <SignOutButton />
+        </div>
         </div>
       </aside>
     </>

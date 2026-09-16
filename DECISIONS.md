@@ -141,10 +141,36 @@ environment gets reset between demos.
 
 ---
 
-## Still open
+## Auth
 
-- **Auth is not wired to the UI.** The current org is resolved server-side by
-  `currentOrgRow`. That function is the entire change needed.
+**Reads run as the user, not the service role.** Before auth, every query used
+the service client, which bypasses RLS — so RLS was decorative. Now the org app
+reads through the user's own client and the database is the boundary. The
+service client is reserved for webhooks, ledger posting and jobs.
+
+**Sign-out is scoped to this browser.** Supabase defaults `signOut()` to global,
+which revokes every session the person has anywhere. A test caught it: signing
+out in one spec killed a parallel spec's session. Signing out on a laptop should
+not sign you out on your phone; signing out everywhere is a separate, deliberate
+action.
+
+**Sign-in errors do not say whether the email exists.** Supabase's own message
+distinguishes "no such user" from "wrong password", which is a way to enumerate
+a platform's customers. One message covers both.
+
+**The `next` parameter is validated.** Only same-origin paths are honoured. An
+open redirect on a login form is what gives a phishing link its credibility.
+
+**Sign-up is two steps.** The person, then the company. Agency and brand are
+different products — wallet-per-client and a hidden margin versus one wallet and
+no margin — and the choice is hard to undo, so it gets a screen that explains
+the difference rather than a radio button in a long form.
+
+**Org creation is all-or-nothing.** Org, founding membership and first space are
+created together, rolling back on failure. A user left with an org they are not
+a member of cannot see it, and an org with no space cannot hold money.
+
+## Still open
 - **The manual deposit form** exists because Nigerian clients pay by bank
   transfer and someone must be able to record it. It is keyed on the bank
   reference so the same transfer cannot be recorded twice, but it is a
