@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { Bell, ChevronRight, Search } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { MobileNavButton } from "./mobile-nav-button";
 
 export interface Crumb {
   label: string;
@@ -18,9 +20,17 @@ export function Topbar({
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-ground/85 px-4 backdrop-blur-md sm:px-6">
+      <MobileNavButton />
+
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5">
         {crumbs.map((crumb, i) => (
-          <span key={`${crumb.label}-${i}`} className="flex min-w-0 items-center gap-1.5">
+          <span
+            key={`${crumb.label}-${i}`}
+            className={cn(
+              "flex min-w-0 items-center gap-1.5",
+              i < crumbs.length - 1 && "hidden sm:flex",
+            )}
+          >
             {i > 0 && <ChevronRight className="size-3.5 shrink-0 text-ink-3" />}
             {crumb.href ? (
               <Link

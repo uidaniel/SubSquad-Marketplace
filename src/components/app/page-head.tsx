@@ -20,13 +20,13 @@ export function PageHead({
   return (
     <div
       className={cn(
-        "mb-7 flex flex-wrap items-start justify-between gap-4",
+        "mb-6 flex flex-wrap items-start justify-between gap-4 sm:mb-7",
         className,
       )}
     >
       <div className="min-w-0">
         {kicker && <p className="mb-1 text-[13px] text-ink-2">{kicker}</p>}
-        <h1 className="text-[22px] font-semibold leading-tight tracking-[-0.02em]">
+        <h1 className="text-[20px] font-semibold leading-tight tracking-[-0.02em] sm:text-[22px]">
           {title}
         </h1>
         {subtitle && (
@@ -47,7 +47,7 @@ export function Page({
   className?: string;
 }) {
   return (
-    <main className={cn("mx-auto w-full max-w-[1280px] px-4 pb-20 pt-7 sm:px-8", className)}>
+    <main className={cn("mx-auto w-full max-w-[1280px] px-4 pb-20 pt-6 sm:px-6 sm:pt-7 lg:px-8", className)}>
       {children}
     </main>
   );
@@ -65,17 +65,11 @@ export function StatStrip({
   items: { label: string; value: string; note?: string; tone?: "ok" | "warn" | "danger" }[];
 }) {
   return (
-    <div className="mb-7 flex flex-wrap gap-y-5 border-y border-line py-4">
-      {items.map((item, i) => (
-        <div
-          key={item.label}
-          className={cn(
-            "min-w-[150px] flex-1 px-7 first:pl-0",
-            i > 0 && "border-l border-line",
-          )}
-        >
+    <div className="mb-7 grid grid-cols-1 gap-px overflow-hidden border-y border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((item) => (
+        <div key={item.label} className="bg-ground px-0 py-3.5 sm:px-6 sm:first:pl-0">
           <p className="text-[12.5px] text-ink-2">{item.label}</p>
-          <p className="mt-0.5 text-[22px] font-semibold tabular-nums tracking-[-0.02em]">
+          <p className="mt-0.5 text-[20px] font-semibold tabular-nums tracking-[-0.02em] sm:text-[22px]">
             {item.value}
           </p>
           {item.note && (

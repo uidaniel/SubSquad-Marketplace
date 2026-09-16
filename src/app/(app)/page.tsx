@@ -129,7 +129,7 @@ export default async function OverviewPage() {
                           <CellSub>{action.detail}</CellSub>
                         </Link>
                       </TD>
-                      <TD numeric className="w-40">
+                      <TD numeric className="hidden w-40 md:table-cell">
                         <CellSub>{action.campaignName}</CellSub>
                       </TD>
                       <TD numeric className="w-14">
@@ -169,9 +169,9 @@ export default async function OverviewPage() {
                 <TR className="hover:bg-transparent">
                   <TH className="w-[32%]">Campaign</TH>
                   <TH>Stage</TH>
-                  <TH numeric>Creators</TH>
+                  <TH numeric className="hidden sm:table-cell">Creators</TH>
                   <TH numeric>In escrow</TH>
-                  <TH numeric>Paid out</TH>
+                  <TH numeric className="hidden md:table-cell">Paid out</TH>
                 </TR>
               </THead>
               <TBody>
@@ -205,7 +205,7 @@ export default async function OverviewPage() {
                         <TD>
                           <CampaignStatusBadge status={campaign.status} />
                         </TD>
-                        <TD numeric>
+                        <TD numeric className="hidden sm:table-cell">
                           <span
                             className={cn(
                               creatorsConfirmed === 0 && "text-ink-3",
@@ -219,7 +219,7 @@ export default async function OverviewPage() {
                             {formatNaira(escrowHeldKobo)}
                           </CellMain>
                         </TD>
-                        <TD numeric>
+                        <TD numeric className="hidden md:table-cell">
                           <span
                             className={cn(
                               "tabular-nums",

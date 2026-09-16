@@ -64,11 +64,11 @@ export default async function CreatorsPage() {
               <THead>
                 <TR className="hover:bg-transparent">
                   <TH className="w-[26%]">Creator</TH>
-                  <TH numeric>Followers</TH>
-                  <TH numeric>Engagement</TH>
+                  <TH numeric className="hidden sm:table-cell">Followers</TH>
+                  <TH numeric className="hidden lg:table-cell">Engagement</TH>
                   <TH>Score</TH>
-                  <TH>Status</TH>
-                  <TH numeric>Deals</TH>
+                  <TH className="hidden md:table-cell">Status</TH>
+                  <TH numeric className="hidden xl:table-cell">Deals</TH>
                   <TH numeric>Earned here</TH>
                 </TR>
               </THead>
@@ -94,8 +94,10 @@ export default async function CreatorsPage() {
                             </span>
                           </div>
                         </TD>
-                        <TD numeric>{formatCount(profile?.followers ?? 0)}</TD>
-                        <TD numeric>
+                        <TD numeric className="hidden sm:table-cell">
+                          {formatCount(profile?.followers ?? 0)}
+                        </TD>
+                        <TD numeric className="hidden lg:table-cell">
                           {formatPercent(profile?.engagementRate ?? 0)}
                         </TD>
                         <TD>
@@ -110,7 +112,7 @@ export default async function CreatorsPage() {
                             </div>
                           )}
                         </TD>
-                        <TD>
+                        <TD className="hidden md:table-cell">
                           <Badge
                             tone={
                               creator.status === "onboarded"
@@ -123,7 +125,7 @@ export default async function CreatorsPage() {
                             {creator.status}
                           </Badge>
                         </TD>
-                        <TD numeric>{dealsCount || "—"}</TD>
+                        <TD numeric className="hidden xl:table-cell">{dealsCount || "—"}</TD>
                         <TD numeric>
                           <span
                             className={cn(

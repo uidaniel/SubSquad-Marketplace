@@ -142,10 +142,10 @@ export default async function WalletPage() {
                 <THead>
                   <TR className="hover:bg-transparent">
                     <TH className="w-[38%]">What happened</TH>
-                    <TH>From</TH>
-                    <TH>To</TH>
+                    <TH className="hidden lg:table-cell">From</TH>
+                    <TH className="hidden lg:table-cell">To</TH>
                     <TH numeric>Amount</TH>
-                    <TH numeric>When</TH>
+                    <TH numeric className="hidden sm:table-cell">When</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -179,13 +179,13 @@ export default async function WalletPage() {
                               {transaction.reference ? ` · ${transaction.reference}` : ""}
                             </CellSub>
                           </TD>
-                          <TD>
+                          <TD className="hidden lg:table-cell">
                             <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-2">
                               <ArrowUpRight className="size-3.5 text-ink-3" />
                               {ACCOUNT_LABELS[accounts[fromIdx]?.kind ?? ""] ?? "—"}
                             </span>
                           </TD>
-                          <TD>
+                          <TD className="hidden lg:table-cell">
                             <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-2">
                               <ArrowDownLeft className="size-3.5 text-ok" />
                               {ACCOUNT_LABELS[accounts[toIdx]?.kind ?? ""] ?? "—"}
@@ -199,7 +199,7 @@ export default async function WalletPage() {
                               {meta.label}
                             </Badge>
                           </TD>
-                          <TD numeric>
+                          <TD numeric className="hidden sm:table-cell">
                             <CellSub>{formatDate(transaction.createdAt)}</CellSub>
                           </TD>
                         </TR>

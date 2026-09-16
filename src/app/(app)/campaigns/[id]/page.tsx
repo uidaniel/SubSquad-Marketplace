@@ -179,9 +179,9 @@ function CreatorsTab({ deals }: { deals: DealSummary[] }) {
             <TR className="hover:bg-transparent">
               <TH className="w-[30%]">Creator</TH>
               <TH>Status</TH>
-              <TH>Score</TH>
+              <TH className="hidden md:table-cell">Score</TH>
               <TH numeric>Fee</TH>
-              <TH numeric>Due</TH>
+              <TH numeric className="hidden sm:table-cell">Due</TH>
             </TR>
           </THead>
           <TBody>
@@ -207,13 +207,15 @@ function CreatorsTab({ deals }: { deals: DealSummary[] }) {
                   <TD>
                     <DealStatusBadge status={deal.status} />
                   </TD>
-                  <TD>{score && <ScoreBadge score={score.fraudScore} />}</TD>
+                  <TD className="hidden md:table-cell">
+                    {score && <ScoreBadge score={score.fraudScore} />}
+                  </TD>
                   <TD numeric>
                     <CellMain className="tabular-nums">
                       {formatNaira(deal.feeKobo)}
                     </CellMain>
                   </TD>
-                  <TD numeric>
+                  <TD numeric className="hidden sm:table-cell">
                     <CellSub>{formatRelative(deal.deadline, NOW)}</CellSub>
                   </TD>
                 </TR>

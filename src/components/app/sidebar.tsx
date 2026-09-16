@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn, initialsOf } from "@/lib/utils";
 import { formatNaira } from "@/lib/money";
+import { NAV_TOGGLE_EVENT } from "./mobile-nav-button";
 
 /**
  * The rail.
@@ -70,9 +72,45 @@ export function Sidebar({
   showOps: boolean;
 }) {
   const pathname = usePathname();
+  const [open, setOpen] = React.useState(false);
+
+  // Below lg the rail is a drawer. It closes on navigation and on Escape, so a
+  // phone user never ends up with the menu covering the page they just opened.
+  React.useEffect(() => {
+    const toggle = () => setOpen((v) => !v);
+    window.addEventListener(NAV_TOGGLE_EVENT, toggle);
+    return () => window.removeEventListener(NAV_TOGGLE_EVENT, toggle);
+  }, []);
+
+  React.useEffect(() => setOpen(false), [pathname]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open]);
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col bg-chrome px-3 pt-4 pb-4 text-chrome-ink lg:flex">
+    <>
+      {open && (
+        <button
+          aria-label="Close navigation"
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-40 bg-chrome/50 backdrop-blur-[2px] lg:hidden"
+        />
+      )}
+      <aside
+        className={cn(
+          "z-50 flex w-[260px] shrink-0 flex-col bg-chrome px-3 pt-4 pb-4 text-chrome-ink",
+          "fixed inset-y-0 left-0 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-[232px] lg:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
       <Link
         href="/"
         className="mb-3 flex items-center gap-2 px-2 py-1 text-[15px] font-semibold text-white"
@@ -193,7 +231,8 @@ export function Sidebar({
           </span>
           <ChevronDown className="size-4 shrink-0 text-chrome-ink/50" />
         </button>
-      </div>
-    </aside>
+        </div>
+      </aside>
+    </>
   );
 }

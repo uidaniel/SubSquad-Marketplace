@@ -3,12 +3,11 @@ import { Topbar } from "@/components/app/topbar";
 import { Page, PageHead } from "@/components/app/page-head";
 import { Badge } from "@/components/ui/badge";
 import {
-  getBalance,
   getCampaign,
+  getCampaignEscrow,
   getCurrentUser,
   getShortlist,
 } from "@/lib/data/queries";
-import { escrowAccountFor } from "@/lib/demo/data";
 import { ShortlistReview } from "./shortlist-review";
 
 export async function generateMetadata({
@@ -32,7 +31,7 @@ export default async function ShortlistPage({
 
   const [rows, escrow] = await Promise.all([
     getShortlist(id),
-    getBalance(escrowAccountFor(id)),
+    getCampaignEscrow(id),
   ]);
 
   const screened = 412; // Recorded on the shortlist run; fixed in the demo dataset.

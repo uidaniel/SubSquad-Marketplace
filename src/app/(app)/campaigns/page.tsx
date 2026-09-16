@@ -72,10 +72,10 @@ export default async function CampaignsPage() {
                 <TR className="hover:bg-transparent">
                   <TH className="w-[30%]">Campaign</TH>
                   <TH>Stage</TH>
-                  <TH numeric>Creators</TH>
+                  <TH numeric className="hidden sm:table-cell">Creators</TH>
                   <TH numeric>In escrow</TH>
-                  <TH numeric>Paid out</TH>
-                  <TH className="w-px" />
+                  <TH numeric className="hidden lg:table-cell">Paid out</TH>
+                  <TH className="hidden w-px md:table-cell" />
                 </TR>
               </THead>
               <TBody>
@@ -107,7 +107,7 @@ export default async function CampaignsPage() {
                         <TD>
                           <CampaignStatusBadge status={campaign.status} />
                         </TD>
-                        <TD numeric>
+                        <TD numeric className="hidden sm:table-cell">
                           <span
                             className={cn(
                               summary.creatorsConfirmed === 0 && "text-ink-3",
@@ -121,7 +121,7 @@ export default async function CampaignsPage() {
                             {formatNaira(summary.escrowHeldKobo)}
                           </CellMain>
                         </TD>
-                        <TD numeric>
+                        <TD numeric className="hidden lg:table-cell">
                           <span
                             className={cn(
                               "tabular-nums",
@@ -131,7 +131,7 @@ export default async function CampaignsPage() {
                             {formatNaira(summary.paidOutKobo)}
                           </span>
                         </TD>
-                        <TD numeric>
+                        <TD numeric className="hidden md:table-cell">
                           {nextAction ? (
                             <Button variant="outline" size="sm" asChild>
                               <Link href={nextAction.href}>
