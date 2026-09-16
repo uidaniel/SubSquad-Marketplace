@@ -7,7 +7,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /** "22 Aug" / "22 Aug 2025" — the year only appears when it is not this one. */
-export function formatDate(input: string | Date, now = new Date()): string {
+export function formatDate(
+  input: string | Date | null | undefined,
+  now = new Date(),
+): string {
+  // Null is ordinary, not exceptional: a campaign saved as a draft has no
+  // deadline yet, and a deal that has not been published has no published_at.
+  // `typeof null === "object"`, so without this the string branch is skipped
+  // and `.getTime()` is called on null — which is how a missing deadline took
+  // down the whole dashboard.
+  if (input === null || input === undefined) return "—";
   const d = typeof input === "string" ? new Date(input) : input;
   if (Number.isNaN(d.getTime())) return "—";
   const sameYear = d.getFullYear() === now.getFullYear();
@@ -19,7 +28,11 @@ export function formatDate(input: string | Date, now = new Date()): string {
 }
 
 /** "in 3 days" / "2 hours ago" — deadlines read better as distance than as a date. */
-export function formatRelative(input: string | Date, now = new Date()): string {
+export function formatRelative(
+  input: string | Date | null | undefined,
+  now = new Date(),
+): string {
+  if (input === null || input === undefined) return "—";
   const d = typeof input === "string" ? new Date(input) : input;
   if (Number.isNaN(d.getTime())) return "—";
   const diffMs = d.getTime() - now.getTime();
