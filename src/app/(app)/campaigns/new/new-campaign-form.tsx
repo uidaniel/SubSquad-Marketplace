@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Info, Plus, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Info, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input, MoneyInput, Select, Textarea } from "@/components/ui/field";
 import { Panel, PanelBody, PanelFooter, PanelHeader, PanelTitle } from "@/components/ui/panel";
 import { fundingRequiredFor } from "@/lib/ledger/transactions";
 import { formatNaira, parseNairaInput } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { createCampaign } from "../../actions";
 
 const PLATFORM_FEE_BPS = 1200;
 
@@ -43,7 +45,19 @@ export function NewCampaignForm({
   defaultMarginBps: number;
   isAgency: boolean;
 }) {
+  const router = useRouter();
   const [spaceId, setSpaceId] = React.useState(spaces[0]?.id ?? "");
+  const [name, setName] = React.useState("");
+  const [product, setProduct] = React.useState("");
+  const [objective, setObjective] = React.useState("awareness");
+  const [category, setCategory] = React.useState("general");
+  const [messages, setMessages] = React.useState("");
+  const [avoid, setAvoid] = React.useState("");
+  const [tag, setTag] = React.useState("#ad");
+  const [rights, setRights] = React.useState("90");
+  const [deadline, setDeadline] = React.useState("");
+  const [busy, setBusy] = React.useState<"create" | "draft" | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
   const [slots, setSlots] = React.useState<Slot[]>([
     { key: "s1", type: "tiktok_video", count: "10", fee: "" },
   ]);
@@ -63,8 +77,49 @@ export function NewCampaignForm({
   const update = (key: string, patch: Partial<Slot>) =>
     setSlots((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)));
 
+  /** Each non-empty line becomes one check the draft is measured against. */
+  const lines = (text: string) =>
+    text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+  async function submit(asDraft: boolean) {
+    setBusy(asDraft ? "draft" : "create");
+    setError(null);
+
+    const result = await createCampaign({
+      spaceId,
+      name,
+      product,
+      objective,
+      category,
+      keyMessages: lines(messages),
+      mustAvoid: lines(avoid),
+      disclosureTag: tag,
+      usageRightsDays: Number(rights) || 90,
+      deadline: deadline || null,
+      slots: slots.map((slot) => ({
+        type: slot.type,
+        count: Number(slot.count) || 0,
+        feeKobo: parseNairaInput(slot.fee) ?? 0,
+      })),
+      asDraft,
+    });
+
+    setBusy(null);
+    if (result.ok && result.campaignId) {
+      router.push(`/campaigns/${result.campaignId}`);
+    } else {
+      setError(result.message);
+    }
+  }
+
   return (
     <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+      {/* Every field above feeds this. Creating a campaign writes down what you
+          want; it does not spend anything and does not contact anybody, which
+          is why an empty wallet is not a reason to refuse. */}
       <Panel>
         <PanelHeader>
           <PanelTitle>Who it is for</PanelTitle>
@@ -80,7 +135,12 @@ export function NewCampaignForm({
             </Select>
           </Field>
           <Field label="Campaign name" htmlFor="name">
-            <Input id="name" placeholder="e.g. Detty December" />
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Detty December"
+            />
           </Field>
         </PanelBody>
       </Panel>
@@ -95,19 +155,24 @@ export function NewCampaignForm({
             hint="One line. This is what a creator reads first."
             htmlFor="product"
           >
-            <Input id="product" placeholder="e.g. PalmPay instant transfers" />
+            <Input
+              id="product"
+              value={product}
+              onChange={(e) => setProduct(e.target.value)}
+              placeholder="e.g. PalmPay instant transfers"
+            />
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Objective" htmlFor="objective">
-              <Select id="objective" defaultValue="awareness">
+              <Select id="objective" value={objective} onChange={(e) => setObjective(e.target.value)}>
                 <option value="awareness">Awareness — get it seen</option>
                 <option value="consideration">Consideration — get it understood</option>
                 <option value="conversion">Conversion — get it used</option>
               </Select>
             </Field>
             <Field label="Category" htmlFor="category" hint="Restricted categories route every draft through ops.">
-              <Select id="category" defaultValue="general">
+              <Select id="category" value={category} onChange={(e) => setCategory(e.target.value)}>
                 <option value="general">General</option>
                 <option value="financial">Financial</option>
                 <option value="alcohol">Alcohol</option>
@@ -124,6 +189,8 @@ export function NewCampaignForm({
           >
             <Textarea
               id="messages"
+              value={messages}
+              onChange={(e) => setMessages(e.target.value)}
               rows={3}
               placeholder={"Transfers are instant and free\nNo card needed to send money"}
             />
@@ -136,6 +203,8 @@ export function NewCampaignForm({
           >
             <Textarea
               id="avoid"
+              value={avoid}
+              onChange={(e) => setAvoid(e.target.value)}
               rows={2}
               placeholder={"Show a competitor's logo\nPromise guaranteed returns"}
             />
@@ -143,17 +212,22 @@ export function NewCampaignForm({
 
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Disclosure tag" htmlFor="tag">
-              <Input id="tag" defaultValue="#ad" />
+              <Input id="tag" value={tag} onChange={(e) => setTag(e.target.value)} />
             </Field>
             <Field label="Usage rights" htmlFor="rights">
-              <Select id="rights" defaultValue="90">
+              <Select id="rights" value={rights} onChange={(e) => setRights(e.target.value)}>
                 <option value="30">30 days organic</option>
                 <option value="90">90 days organic</option>
                 <option value="365">1 year organic</option>
               </Select>
             </Field>
             <Field label="Deadline" htmlFor="deadline">
-              <Input id="deadline" type="date" />
+              <Input
+                id="deadline"
+                type="date"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+              />
             </Field>
           </div>
         </PanelBody>
@@ -185,8 +259,27 @@ export function NewCampaignForm({
           <PanelTitle>What you are buying</PanelTitle>
         </PanelHeader>
         <PanelBody className="space-y-3">
+          {/* The three inputs below are a sentence — "10 TikTok videos, ₦85,000
+              each" — and without headings they are three unexplained boxes.
+              Hidden on small screens, where the rows stack and each field gets
+              its own label instead. */}
+          <div
+            aria-hidden
+            className="hidden gap-3 px-1 text-[12px] font-medium text-ink-2 sm:grid sm:grid-cols-[1fr_90px_140px_auto]"
+          >
+            <span>Deliverable</span>
+            <span>Creators</span>
+            <span>Fee each</span>
+            <span className="w-9" />
+          </div>
+
           {slots.map((slot) => (
             <div key={slot.key} className="grid gap-3 sm:grid-cols-[1fr_90px_140px_auto]">
+              <label className="sm:hidden">
+                <span className="mb-1 block text-[12px] font-medium text-ink-2">
+                  Deliverable
+                </span>
+              </label>
               <Select
                 value={slot.type}
                 onChange={(e) => update(slot.key, { type: e.target.value })}
@@ -266,11 +359,34 @@ export function NewCampaignForm({
         </PanelFooter>
       </Panel>
 
+      {error && (
+        <p
+          role="alert"
+          className="rounded-[var(--radius-sm)] bg-danger-soft px-3 py-2.5 text-[13px] text-danger"
+        >
+          {error}
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="brand" size="lg" disabled={creatorFees === 0}>
+        <Button
+          type="button"
+          variant="brand"
+          size="lg"
+          disabled={busy !== null || creatorFees === 0}
+          onClick={() => submit(false)}
+        >
+          {busy === "create" && <Loader2 className="animate-spin" />}
           Create campaign
         </Button>
-        <Button type="button" variant="outline" size="lg">
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          disabled={busy !== null}
+          onClick={() => submit(true)}
+        >
+          {busy === "draft" && <Loader2 className="animate-spin" />}
           Save as draft
         </Button>
       </div>

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AlertTriangle, Check, ExternalLink, FileText, Sparkles, X } from "lucide-react";
 import { Topbar } from "@/components/app/topbar";
 import { Page, PageHead, StatStrip } from "@/components/app/page-head";
+import { RevisionForm } from "./revision-form";
 import { ActionButton } from "@/components/app/action-button";
 import { DealStatusBadge, ScoreBadge } from "@/components/app/status";
 import { Avatar } from "@/components/ui/avatar";
@@ -182,12 +183,7 @@ export default async function DealPage({
                         >
                           <Check /> Approve
                         </ActionButton>
-                        <Link
-                          href={`/deals/${deal.id}/revise`}
-                          className="inline-flex h-9 items-center rounded-[var(--radius-sm)] border border-line-strong px-4 text-[13.5px] font-medium hover:bg-ground"
-                        >
-                          Request a revision
-                        </Link>
+                        <RevisionForm draftId={latest.id} />
                       </div>
                     )}
                   </div>

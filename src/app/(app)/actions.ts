@@ -6,7 +6,7 @@ import { accountFor, InsufficientFunds, post } from "@/lib/ledger/post";
 import { buildDeposit, buildLock, fundingRequiredFor } from "@/lib/ledger/transactions";
 import { releaseDeal } from "@/lib/deals/release";
 import { checkSendAllowed } from "@/lib/messaging/policy";
-import { getCurrentUser } from "@/lib/data/queries";
+import { getCurrentOrg, getCurrentUser } from "@/lib/data/queries";
 import { formatNaira, parseNairaInput } from "@/lib/money";
 
 /**
@@ -545,4 +545,139 @@ export async function verifyPublished(dealId: string): Promise<ActionResult> {
     }
     return { ok: false, message: (error as Error).message };
   }
+}
+
+/* ==========================================================================
+   Creating a campaign
+   ========================================================================== */
+
+export interface NewCampaignInput {
+  spaceId: string;
+  name: string;
+  product: string;
+  objective: string;
+  category: string;
+  keyMessages: string[];
+  mustAvoid: string[];
+  disclosureTag: string;
+  usageRightsDays: number;
+  deadline: string | null;
+  slots: { type: string; count: number; feeKobo: number }[];
+  /** Draft campaigns are saved and left alone; created ones are ready to fund. */
+  asDraft: boolean;
+}
+
+/**
+ * Creates a campaign and its deliverables.
+ *
+ * Nothing is funded and nobody is contacted here — creating a campaign is
+ * writing down what you want, and the money is a separate, deliberate step. So
+ * this succeeds even when the wallet is empty, which is the normal case: most
+ * agencies write the brief while waiting for the client's transfer to land.
+ */
+export async function createCampaign(
+  input: NewCampaignInput,
+): Promise<ActionResult & { campaignId?: string }> {
+  const name = input.name.trim();
+  if (!name) {
+    return { ok: false, message: "Give the campaign a name." };
+  }
+  if (!input.spaceId) {
+    return { ok: false, message: "Choose which client this is for." };
+  }
+
+  const slots = input.slots.filter((s) => s.count > 0 && s.feeKobo > 0);
+  if (slots.length === 0 && !input.asDraft) {
+    return {
+      ok: false,
+      message: "Add at least one deliverable with a fee before creating it.",
+    };
+  }
+
+  const org = await getCurrentOrg();
+  const db = requireServiceClient();
+
+  const { data: space } = await db
+    .from("spaces")
+    .select("id, name, org_id")
+    .eq("id", input.spaceId)
+    .maybeSingle();
+
+  // Belt and braces alongside RLS: a space id from another org must not be
+  // usable just because it was posted in a form field.
+  if (!space || space.org_id !== org.id) {
+    return { ok: false, message: "That client is not on your account." };
+  }
+
+  const creatorFees = slots.reduce((sum, s) => sum + s.feeKobo * s.count, 0);
+  const fees = slots.map((s) => s.feeKobo).filter((f) => f > 0);
+
+  const { data: campaign, error } = await db
+    .from("campaigns")
+    .insert({
+      space_id: space.id,
+      org_id: org.id,
+      name,
+      end_brand_name: space.name,
+      status: "draft",
+      budget_kobo: creatorFees > 0 ? fundingRequiredFor(creatorFees, 1200) : 0,
+      platform_fee_bps: 1200,
+      agency_margin_bps: org.type === "agency" ? org.defaultMarginBps : null,
+      arcon_category: input.category,
+      brief: {
+        objective: input.objective,
+        product: input.product.trim(),
+        key_messages: input.keyMessages.filter(Boolean),
+        must_include: input.keyMessages.filter(Boolean),
+        must_avoid: input.mustAvoid.filter(Boolean),
+        audience: { cities: [], languages: ["English"] },
+        platforms: [...new Set(slots.map((s) => s.type.split("_")[0]))],
+        tone: "",
+        disclosure_tag: input.disclosureTag.trim() || "#ad",
+        arcon_category: input.category,
+        usage_rights_days: input.usageRightsDays,
+      },
+      // The band the AI negotiates inside: never above what was budgeted, and
+      // not so far below it that every offer insults the creator.
+      rate_band_min_kobo: fees.length ? Math.round(Math.min(...fees) * 0.6) : 0,
+      rate_band_max_kobo: fees.length ? Math.max(...fees) : 0,
+      deadline: input.deadline,
+    })
+    .select("id")
+    .single();
+
+  if (error || !campaign) {
+    return {
+      ok: false,
+      message: error?.message ?? "Could not create the campaign.",
+    };
+  }
+
+  if (slots.length > 0) {
+    const { error: slotError } = await db.from("campaign_slots").insert(
+      slots.map((s) => ({
+        campaign_id: campaign.id,
+        deliverable_type: s.type,
+        count: s.count,
+        fee_kobo: s.feeKobo,
+      })),
+    );
+    if (slotError) {
+      // A campaign with no deliverables cannot be funded or shortlisted, so it
+      // is worse than no campaign at all.
+      await db.from("campaigns").delete().eq("id", campaign.id);
+      return { ok: false, message: slotError.message };
+    }
+  }
+
+  revalidatePath("/campaigns");
+  revalidatePath("/");
+
+  return {
+    ok: true,
+    campaignId: campaign.id,
+    message: input.asDraft
+      ? "Saved as a draft. Nothing is funded and nobody has been contacted."
+      : "Campaign created. Fund it when you are ready — nobody is contacted until then.",
+  };
 }
