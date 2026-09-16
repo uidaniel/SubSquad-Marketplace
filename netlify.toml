@@ -1,0 +1,55 @@
+# ============================================================================
+# Netlify
+#
+# Netlify detects Next.js and installs its runtime automatically, so this file
+# only pins the things worth being explicit about: the build command, the Node
+# version, and the headers.
+#
+# Two constraints shape the app rather than this file:
+#
+#   · A synchronous function has a short ceiling (10s on the free tier, 26s on
+#     Pro). Anything slower than that — generating a shortlist, transcribing a
+#     video, running a content review — is a Trigger.dev job, not a request.
+#     That was already true; Netlify just makes it non-negotiable.
+#
+#   · Middleware runs on Netlify's edge runtime rather than in Node. The session
+#     refresh in `src/middleware.ts` uses only fetch and cookies, which is edge
+#     safe; anything needing Node APIs must stay out of it.
+# ============================================================================
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Netlify runs `npm install` without dev dependencies unless told otherwise,
+  # and the build needs TypeScript and Tailwind.
+  NPM_FLAGS = "--include=dev"
+
+# ----------------------------------------------------------------------------
+# Security headers.
+#
+# The app handles money and contracts, so it should not be framable, should not
+# leak referrers to third parties, and should not be sniffed into another type.
+# ----------------------------------------------------------------------------
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+
+# Invite and guest-brand links are sent to one person and should never be
+# indexed, however they end up shared.
+[[headers]]
+  for = "/i/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/d/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"

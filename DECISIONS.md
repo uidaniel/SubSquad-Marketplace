@@ -170,6 +170,66 @@ the difference rather than a radio button in a long form.
 created together, rolling back on failure. A user left with an org they are not
 a member of cannot see it, and an org with no space cannot hold money.
 
+## Day 4 — creator onboarding
+
+**Verification codes go over WhatsApp, not SMS.** The spec said SMS via Supabase
+phone auth. Two things argued against it: the creator has just arrived from a
+WhatsApp link, so it is the channel they already have open; and SMS delivery to
+Nigerian networks is slow, expensive and silently lossy in a way that strands
+people halfway through onboarding with no way to tell them why. The interface
+does not care which channel carried the code, so SMS remains a fallback to add.
+
+**Codes are ours rather than Supabase's.** Stored as keyed hashes, five attempts,
+five sends an hour, ten-minute expiry, only the newest code valid. A six-digit
+code is one-in-a-million once and one-in-two if you allow half a million tries,
+so the attempt cap is the security property, not the length.
+
+**Onboarding state lives on the creator, not the deal or a session.** So a
+creator accepting their second deal is not asked for their bank details again,
+and one whose phone died halfway resumes exactly where they stopped.
+
+**The payout account is resolved to a name before it is saved.** A mistyped digit
+is the commonest cause of a failed payout, and it fails after the work is done.
+One extra confirmation tap moves that failure to a moment when it is cheap.
+
+**Counter-offers do not change the fee.** They land in the agency's inbox as an
+inbound message and move the deal to negotiating. A number becomes an offer when
+a person approves it — the same rule that governs everything else sent on an
+agency's behalf.
+
+## Day 5 — drafts
+
+**Uploads bypass the app server.** The server issues a signed URL for one object
+path and the phone uploads straight to Storage. A 200MB video relayed through a
+serverless function would be slow, costly, and would exceed the request body
+limit long before it finished.
+
+**Progress is XHR, not fetch.** `fetch` still cannot report upload progress. A
+silent three-minute wait on a phone reads as a hang, so the bar is real.
+
+**Not yet resumable.** The spec asked for resumable uploads and Supabase supports
+TUS, but TUS needs a session-bearing credential and a creator authenticates with
+an invite token rather than an account. The current flow keeps the chosen file on
+failure so retrying is one tap. Proper resumability follows creator sessions.
+
+**The drafts bucket is private.** An unapproved draft is unpublished work for a
+brand that has not agreed to it being seen. Access is by short-lived signed URL,
+so a link pasted into a group chat stops working before it spreads.
+
+## Hosting
+
+**Netlify rather than Vercel.** The founder's call; the spec said Vercel. Next 15
+App Router, server actions and middleware are all supported. Two consequences
+worth holding on to:
+
+- Synchronous functions have a short ceiling (10s free, 26s Pro). Anything
+  slower — shortlist generation, transcription, content review — has to be a
+  Trigger.dev job rather than a request. That was already the design; Netlify
+  makes it non-negotiable.
+- Middleware runs on the edge runtime, not Node. The session refresh uses only
+  fetch and cookies, which is safe there. Nothing needing a Node API may move
+  into it.
+
 ## Still open
 - **The manual deposit form** exists because Nigerian clients pay by bank
   transfer and someone must be able to record it. It is keyed on the bank
