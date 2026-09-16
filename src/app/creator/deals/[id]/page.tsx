@@ -15,6 +15,7 @@ import { getCreatorDeal, getCurrentCreator } from "@/lib/data/creator-queries";
 import { NOW } from "@/lib/data/queries";
 import { formatNaira } from "@/lib/money";
 import { cn, formatDate, formatRelative } from "@/lib/utils";
+import { NoCreatorSession } from "@/app/creator/no-session";
 
 export const metadata = { title: "Deal" };
 
@@ -33,6 +34,7 @@ export default async function CreatorDealPage({
 }) {
   const { id } = await params;
   const creator = await getCurrentCreator();
+  if (!creator) return <NoCreatorSession what="this deal" />;
   const view = await getCreatorDeal(creator.id, id);
   if (!view) notFound();
 

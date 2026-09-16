@@ -9,11 +9,13 @@ import {
 import { NOW } from "@/lib/data/queries";
 import { formatNaira } from "@/lib/money";
 import { formatRelative } from "@/lib/utils";
+import { NoCreatorSession } from "@/app/creator/no-session";
 
 export const metadata = { title: "Your money" };
 
 export default async function CreatorWalletPage() {
   const creator = await getCurrentCreator();
+  if (!creator) return <NoCreatorSession what="your money" />;
   const [money, deals] = await Promise.all([
     getCreatorMoney(creator.id),
     getCreatorDeals(creator.id),

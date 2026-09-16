@@ -1,5 +1,6 @@
 import { getCreatorDeals, getCurrentCreator } from "@/lib/data/creator-queries";
 import { NewDealForm } from "./new-deal-form";
+import { NoCreatorSession } from "@/app/creator/no-session";
 
 export const metadata = { title: "New deal" };
 
@@ -9,6 +10,7 @@ const UNFUNDED_CAP = 5;
 
 export default async function NewDealPage() {
   const creator = await getCurrentCreator();
+  if (!creator) return <NoCreatorSession what="your own deals" />;
   const deals = await getCreatorDeals(creator.id);
   const unfunded = deals.filter((d) =>
     ["awaiting_funding", "partially_funded"].includes(d.deal.status),

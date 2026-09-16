@@ -7,11 +7,13 @@ import { getCreatorMoney, getCurrentCreator } from "@/lib/data/creator-queries";
 import { DEMO_PROFILES, DEMO_SCORES } from "@/lib/demo/data";
 import { formatNaira } from "@/lib/money";
 import { formatCount, formatPercent } from "@/lib/utils";
+import { NoCreatorSession } from "@/app/creator/no-session";
 
 export const metadata = { title: "Your profile" };
 
 export default async function CreatorProfilePage() {
   const creator = await getCurrentCreator();
+  if (!creator) return <NoCreatorSession what="your profile" />;
   const [money] = await Promise.all([getCreatorMoney(creator.id)]);
   const profile = DEMO_PROFILES.find((p) => p.creatorId === creator.id);
   const score = DEMO_SCORES.find((s) => s.creatorId === creator.id);

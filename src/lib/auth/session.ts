@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { one } from "@/lib/data/relations";
 import { requireServiceClient } from "@/lib/supabase/service";
 import { env } from "@/lib/env";
 import type { Org, OrgMember } from "@/lib/domain";
@@ -46,9 +47,12 @@ export const getSession = cache(async (): Promise<Session | null> => {
     .limit(1)
     .maybeSingle();
 
-  if (!membership?.orgs) return null;
-
-  const orgRow = membership.orgs as unknown as Record<string, unknown>;
+  // Supabase returns an embedded relation as an array even when the foreign key
+  // guarantees one row. Casting it straight to an object type checks fine and
+  // yields undefined for every field — which meant org.id was undefined and
+  // every org-scoped query after this silently matched nothing.
+  const orgRow = one(membership?.orgs);
+  if (!membership || !orgRow) return null;
   const name =
     (user.user_metadata?.name as string | undefined) ??
     user.email?.split("@")[0] ??
