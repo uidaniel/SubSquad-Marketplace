@@ -186,7 +186,6 @@ export async function approveShortlist(
   removedItemIds: string[],
 ): Promise<ActionResult> {
   const db = requireServiceClient();
-  const user = await getCurrentUser();
 
   const { data: items } = await db
     .from("shortlist_items")
@@ -303,8 +302,7 @@ export async function approveShortlist(
       (skipped
         ? ` ${skipped} creator${skipped === 1 ? " was" : "s were"} skipped — opted out, or contacted in the last week.`
         : ""),
-    // The approver's name is recorded on the deal messages when they send.
-  } satisfies ActionResult & { _by?: typeof user };
+  };
 }
 
 function inviteBody(args: {

@@ -89,7 +89,7 @@ export default async function AppLayout({
         userRole={user.role === "owner" ? "Owner" : "Team"}
         showOps={isAgency}
       />
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">{children}</div>
     </div>
   );
 }

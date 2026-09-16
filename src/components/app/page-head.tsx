@@ -24,7 +24,7 @@ export function PageHead({
         className,
       )}
     >
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         {kicker && <p className="mb-1 text-[13px] text-ink-2">{kicker}</p>}
         <h1 className="text-[20px] font-semibold leading-tight tracking-[-0.02em] sm:text-[22px]">
           {title}
@@ -33,7 +33,9 @@ export function PageHead({
           <div className="mt-1.5 text-[13.5px] text-ink-2">{subtitle}</div>
         )}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2.5">{actions}</div>}
+      {actions && (
+        <div className="flex min-w-0 flex-wrap items-center gap-2.5">{actions}</div>
+      )}
     </div>
   );
 }
@@ -65,7 +67,7 @@ export function StatStrip({
   items: { label: string; value: string; note?: string; tone?: "ok" | "warn" | "danger" }[];
 }) {
   return (
-    <div className="mb-7 grid grid-cols-1 gap-px overflow-hidden border-y border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+    <div className="mb-7 grid grid-cols-1 gap-px overflow-hidden border-y border-line bg-line sm:[grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
       {items.map((item) => (
         <div key={item.label} className="bg-ground px-0 py-3.5 sm:px-6 sm:first:pl-0">
           <p className="text-[12.5px] text-ink-2">{item.label}</p>

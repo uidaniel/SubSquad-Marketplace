@@ -4,7 +4,6 @@ import * as React from "react";
 import Link from "next/link";
 import { Check, ChevronDown, Sparkles, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelBody, PanelHeader, PanelTitle } from "@/components/ui/panel";
 import { ScoreBadge } from "@/components/app/status";

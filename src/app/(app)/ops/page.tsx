@@ -15,7 +15,6 @@ import { requireServiceClient } from "@/lib/supabase/service";
 import { env } from "@/lib/env";
 import { getCurrentUser, getPendingMessageDrafts, NOW } from "@/lib/data/queries";
 import { integrations } from "@/lib/env";
-import { formatNaira } from "@/lib/money";
 import { formatRelative } from "@/lib/utils";
 
 export const metadata = { title: "Ops console" };
