@@ -626,6 +626,17 @@ export const DEMO_SHORTLIST: ShortlistItem[] = [
       "Port Harcourt comedy reach at roughly half the Lagos rate. Not in the brief's named cities, but the audience overlaps and the cost per thousand reached is the best on this shortlist.",
   },
   {
+    id: "sl_5",
+    campaignId: "cmp_detty",
+    creatorId: "crt_bolu",
+    slotId: "slot_detty_tt",
+    fitScore: 71,
+    estimatedFeeKobo: naira(48_000),
+    status: "proposed",
+    aiReasoning:
+      "Ibadan finance explainer at the lowest fee on the shortlist, and the only one already making content about money products. Included despite the score: the deductions are about audience quality, not honesty, and at this fee the downside is small.",
+  },
+  {
     id: "sl_4",
     campaignId: "cmp_detty",
     creatorId: "crt_zainab",
