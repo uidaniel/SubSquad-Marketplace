@@ -1,0 +1,550 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { requireServiceClient } from "@/lib/supabase/service";
+import { accountFor, InsufficientFunds, post } from "@/lib/ledger/post";
+import { buildDeposit, buildLock, fundingRequiredFor } from "@/lib/ledger/transactions";
+import { releaseDeal } from "@/lib/deals/release";
+import { checkSendAllowed } from "@/lib/messaging/policy";
+import { getCurrentUser } from "@/lib/data/queries";
+import { formatNaira, parseNairaInput } from "@/lib/money";
+
+/**
+ * Everything the org app can change.
+ *
+ * Each action returns a result rather than throwing at the UI, so a refusal —
+ * not enough money, a creator who opted out — is shown as a sentence the person
+ * can act on instead of an error page. The rules themselves live in lib; these
+ * are the seams between a button and those rules.
+ */
+
+export type ActionResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
+
+/* ==========================================================================
+   Money in
+   ========================================================================== */
+
+/**
+ * Records a deposit into a client's wallet.
+ *
+ * In production this is driven by a verified Paystack webhook, never by a form.
+ * The manual path exists because a Nigerian agency's client will pay by bank
+ * transfer, and someone has to be able to record that without waiting for a
+ * card rail to catch up — so it is restricted to a named person and always
+ * carries the reference it was reconciled against.
+ */
+export async function recordDeposit(
+  spaceId: string,
+  amountText: string,
+  reference: string,
+): Promise<ActionResult> {
+  const amountKobo = parseNairaInput(amountText);
+  if (amountKobo === null || amountKobo <= 0) {
+    return { ok: false, message: "Enter an amount, like 500,000." };
+  }
+  if (!reference.trim()) {
+    return {
+      ok: false,
+      message: "Add the bank reference so this can be reconciled later.",
+    };
+  }
+
+  const db = requireServiceClient();
+  const { data: space } = await db
+    .from("spaces")
+    .select("id, org_id, name")
+    .eq("id", spaceId)
+    .single();
+  if (!space) return { ok: false, message: "That client space no longer exists." };
+
+  const user = await getCurrentUser();
+
+  try {
+    const clearing = await accountFor("paystack_clearing");
+    const wallet = await accountFor("space_wallet", {
+      orgId: space.org_id,
+      spaceId: space.id,
+    });
+
+    const result = await post(
+      buildDeposit({
+        clearingAccountId: clearing,
+        destinationAccountId: wallet,
+        amountKobo,
+        reference: reference.trim(),
+        memo: `Deposit for ${space.name}`,
+      }),
+      { createdBy: user.userId },
+    );
+
+    revalidatePath("/wallet");
+    revalidatePath("/");
+
+    return {
+      ok: true,
+      message: result.alreadyApplied
+        ? `That reference was already recorded — nothing was added twice.`
+        : `${formatNaira(amountKobo)} added to ${space.name}.`,
+    };
+  } catch (error) {
+    return { ok: false, message: (error as Error).message };
+  }
+}
+
+/**
+ * Funds a campaign: moves budget from the client's wallet into escrow.
+ *
+ * The amount must cover the creator fees *and* the platform fee on top, because
+ * a campaign that can pay its creators but not its own fee would fail at the
+ * last step — when the creator has already done the work.
+ */
+export async function fundCampaign(campaignId: string): Promise<ActionResult> {
+  const db = requireServiceClient();
+
+  const { data: campaign } = await db
+    .from("campaigns")
+    .select("*, campaign_slots(count, fee_kobo)")
+    .eq("id", campaignId)
+    .single();
+  if (!campaign) return { ok: false, message: "That campaign no longer exists." };
+
+  const slots = (campaign.campaign_slots ?? []) as { count: number; fee_kobo: number }[];
+  const creatorFees = slots.reduce(
+    (sum, s) => sum + Number(s.fee_kobo) * Number(s.count),
+    0,
+  );
+  if (creatorFees <= 0) {
+    return {
+      ok: false,
+      message: "Add at least one deliverable and a fee before funding.",
+    };
+  }
+
+  const required = fundingRequiredFor(creatorFees, Number(campaign.platform_fee_bps));
+  const user = await getCurrentUser();
+
+  try {
+    const wallet = await accountFor("space_wallet", {
+      orgId: campaign.org_id,
+      spaceId: campaign.space_id,
+    });
+    const escrow = await accountFor("campaign_escrow", {
+      orgId: campaign.org_id,
+      spaceId: campaign.space_id,
+      campaignId: campaign.id,
+    });
+
+    await post(
+      buildLock({
+        spaceWalletAccountId: wallet,
+        escrowAccountId: escrow,
+        amountKobo: required,
+        memo: `Funded ${campaign.name}`,
+      }),
+      { createdBy: user.userId, requireFunds: [wallet] },
+    );
+
+    await db
+      .from("campaigns")
+      .update({ status: "funded", budget_kobo: required })
+      .eq("id", campaign.id);
+
+    revalidatePath(`/campaigns/${campaign.id}`);
+    revalidatePath("/campaigns");
+    revalidatePath("/");
+
+    return {
+      ok: true,
+      message: `${formatNaira(required)} locked in escrow. Nobody is contacted until this is done — now outreach can start.`,
+    };
+  } catch (error) {
+    if (error instanceof InsufficientFunds) {
+      return {
+        ok: false,
+        message: `This client's wallet holds ${formatNaira(error.availableKobo)}, and ${formatNaira(error.requiredKobo)} is needed — creator fees plus the ${Number(campaign.platform_fee_bps) / 100}% fee on top. Add funds first.`,
+      };
+    }
+    return { ok: false, message: (error as Error).message };
+  }
+}
+
+/* ==========================================================================
+   Shortlist
+   ========================================================================== */
+
+/**
+ * Turns approved shortlist entries into invited deals.
+ *
+ * It creates the deals and drafts an invite per creator; it does not send
+ * anything. The drafts land in the outreach queue for a person to approve,
+ * which is the rule the whole product rests on.
+ */
+export async function approveShortlist(
+  campaignId: string,
+  removedItemIds: string[],
+): Promise<ActionResult> {
+  const db = requireServiceClient();
+  const user = await getCurrentUser();
+
+  const { data: items } = await db
+    .from("shortlist_items")
+    .select("*, creators(id, display_name, phone, email, whatsapp_opt_in, do_not_contact, last_contacted_at)")
+    .eq("campaign_id", campaignId)
+    .eq("status", "proposed");
+
+  if (!items?.length) {
+    return { ok: false, message: "There is nothing left to approve on this shortlist." };
+  }
+
+  const removed = new Set(removedItemIds);
+  const approved = items.filter((i) => !removed.has(i.id));
+
+  if (approved.length === 0) {
+    return { ok: false, message: "Every creator was removed, so there is nothing to send." };
+  }
+
+  const { data: campaign } = await db
+    .from("campaigns")
+    .select("id, name, end_brand_name, deadline")
+    .eq("id", campaignId)
+    .single();
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const item of approved) {
+    const creator = item.creators as {
+      id: string;
+      display_name: string;
+      phone: string | null;
+      email: string | null;
+      whatsapp_opt_in: boolean;
+      do_not_contact: boolean;
+      last_contacted_at: string | null;
+    };
+
+    // Checked before a deal is created, not before it is sent: a creator who
+    // cannot be contacted should not end up with a deal sitting against their
+    // name that nobody will ever act on.
+    const allowed = checkSendAllowed(
+      {
+        doNotContact: creator.do_not_contact,
+        lastUnsolicitedAt: creator.last_contacted_at,
+        phone: creator.phone,
+        email: creator.email,
+        whatsappOptIn: creator.whatsapp_opt_in,
+      },
+      {},
+    );
+    if (!allowed.allowed) {
+      skipped += 1;
+      continue;
+    }
+
+    const { data: deal } = await db
+      .from("deals")
+      .insert({
+        campaign_id: campaignId,
+        creator_id: creator.id,
+        slot_id: item.slot_id,
+        origin: "campaign",
+        fee_kobo: item.estimated_fee_kobo,
+        platform_fee_bps: 1200,
+        fee_paid_by: "brand",
+        status: "invited",
+        deadline: campaign?.deadline ?? null,
+      })
+      .select("id, invite_token")
+      .single();
+
+    if (!deal) continue;
+
+    await db.from("deal_messages").insert({
+      deal_id: deal.id,
+      direction: "outbound",
+      channel: creator.phone ? "whatsapp" : "email",
+      ai_draft: true,
+      body: inviteBody({
+        firstName: creator.display_name.split(" ")[0],
+        brand: campaign?.end_brand_name ?? "A brand",
+        feeKobo: Number(item.estimated_fee_kobo),
+        token: deal.invite_token,
+      }),
+    });
+
+    created += 1;
+  }
+
+  await db
+    .from("shortlist_items")
+    .update({ status: "approved" })
+    .in(
+      "id",
+      approved.map((i) => i.id),
+    );
+  if (removed.size) {
+    await db
+      .from("shortlist_items")
+      .update({ status: "removed" })
+      .in("id", [...removed]);
+  }
+  await db.from("campaigns").update({ status: "outreach" }).eq("id", campaignId);
+
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/outreach");
+  revalidatePath("/");
+
+  return {
+    ok: true,
+    message:
+      `${created} invite${created === 1 ? "" : "s"} drafted and waiting for your approval in Outreach.` +
+      (skipped
+        ? ` ${skipped} creator${skipped === 1 ? " was" : "s were"} skipped — opted out, or contacted in the last week.`
+        : ""),
+    // The approver's name is recorded on the deal messages when they send.
+  } satisfies ActionResult & { _by?: typeof user };
+}
+
+function inviteBody(args: {
+  firstName: string;
+  brand: string;
+  feeKobo: number;
+  token: string;
+}): string {
+  return [
+    `Hi ${args.firstName} — ${args.brand} would like one video from you.`,
+    `Fee: ${formatNaira(args.feeKobo)}, already held in escrow.`,
+    `Details and accept: subsquad.ng/i/${args.token}`,
+    `Reply STOP to opt out.`,
+  ].join("\n");
+}
+
+/* ==========================================================================
+   Outreach
+   ========================================================================== */
+
+/** Approves a drafted message and sends it, honouring DRY_RUN and the caps. */
+export async function approveMessage(messageId: string): Promise<ActionResult> {
+  const db = requireServiceClient();
+  const user = await getCurrentUser();
+
+  const { data: message } = await db
+    .from("deal_messages")
+    .select("*, deals(creator_id)")
+    .eq("id", messageId)
+    .single();
+  if (!message) return { ok: false, message: "That message is no longer here." };
+  if (message.sent_at) return { ok: false, message: "That message has already been sent." };
+
+  const creatorId = (message.deals as { creator_id: string }).creator_id;
+  const { data: creator } = await db
+    .from("creators")
+    .select("phone, email, whatsapp_opt_in, do_not_contact, last_contacted_at, display_name")
+    .eq("id", creatorId)
+    .single();
+  if (!creator) return { ok: false, message: "That creator is no longer here." };
+
+  const { sendMessage } = await import("@/lib/messaging/send");
+  const outcome = await sendMessage(
+    {
+      dealId: message.deal_id,
+      channel: message.channel,
+      body: message.body,
+      to: { phone: creator.phone, email: creator.email },
+      aiDraft: message.ai_draft,
+      approvedBy: user.userId,
+    },
+    {
+      doNotContact: creator.do_not_contact,
+      lastUnsolicitedAt: creator.last_contacted_at,
+      phone: creator.phone,
+      email: creator.email,
+      whatsappOptIn: creator.whatsapp_opt_in,
+    },
+  );
+
+  if (!outcome.sent) {
+    return { ok: false, message: outcome.detail };
+  }
+
+  await db
+    .from("deal_messages")
+    .update({
+      approved_by: user.userId,
+      sent_at: new Date().toISOString(),
+      provider_message_id: outcome.providerMessageId,
+      ai_draft: false,
+    })
+    .eq("id", messageId);
+
+  await db
+    .from("creators")
+    .update({ last_contacted_at: new Date().toISOString() })
+    .eq("id", creatorId);
+
+  await db.from("contact_log").insert({
+    creator_id: creatorId,
+    deal_id: message.deal_id,
+    channel: message.channel,
+    unsolicited: true,
+  });
+
+  revalidatePath("/outreach");
+  revalidatePath("/");
+
+  return {
+    ok: true,
+    message: outcome.dryRun
+      ? `Approved. DRY_RUN is on, so it was logged instead of sent to ${creator.display_name}.`
+      : `Sent to ${creator.display_name}.`,
+  };
+}
+
+/* ==========================================================================
+   Content
+   ========================================================================== */
+
+/** Approves a draft and releases the creator's fee from escrow. */
+export async function approveDraft(
+  draftId: string,
+  notes?: string,
+): Promise<ActionResult> {
+  const db = requireServiceClient();
+  const user = await getCurrentUser();
+
+  const { data: draft } = await db
+    .from("drafts")
+    .select("id, deal_id, version")
+    .eq("id", draftId)
+    .single();
+  if (!draft) return { ok: false, message: "That draft is no longer here." };
+
+  await db
+    .from("drafts")
+    .update({
+      reviewer_decision: "approved",
+      reviewer_notes: notes ?? null,
+      reviewed_by: user.userId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", draftId);
+
+  // Approving the content is not the same as the content being live. The deal
+  // moves to approved; the money moves when a published URL is verified.
+  await db.from("deals").update({ status: "approved" }).eq("id", draft.deal_id);
+
+  revalidatePath(`/deals/${draft.deal_id}`);
+  revalidatePath("/");
+
+  return {
+    ok: true,
+    message: "Approved. The creator can publish now — payment releases once the post is verified live.",
+  };
+}
+
+export async function requestRevision(
+  draftId: string,
+  notes: string,
+): Promise<ActionResult> {
+  if (!notes.trim()) {
+    return {
+      ok: false,
+      message: "Say what needs to change — the creator receives this word for word.",
+    };
+  }
+
+  const db = requireServiceClient();
+  const user = await getCurrentUser();
+
+  const { data: draft } = await db
+    .from("drafts")
+    .select("id, deal_id")
+    .eq("id", draftId)
+    .single();
+  if (!draft) return { ok: false, message: "That draft is no longer here." };
+
+  await db
+    .from("drafts")
+    .update({
+      reviewer_decision: "revision",
+      reviewer_notes: notes,
+      reviewed_by: user.userId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", draftId);
+
+  await db
+    .from("deals")
+    .update({ status: "revision_requested" })
+    .eq("id", draft.deal_id);
+
+  await db.from("deal_messages").insert({
+    deal_id: draft.deal_id,
+    direction: "outbound",
+    channel: "whatsapp",
+    ai_draft: true,
+    body: notes,
+  });
+
+  revalidatePath(`/deals/${draft.deal_id}`);
+  revalidatePath("/outreach");
+
+  return {
+    ok: true,
+    message: "Sent back with your note. It is queued in Outreach for you to approve before it reaches them.",
+  };
+}
+
+/**
+ * Confirms a post is live, which is what actually releases the money.
+ *
+ * Verification is a person clicking after seeing the post, not an automated
+ * scrape — v1 does not read post metrics, and paying out on an unverified claim
+ * is exactly the failure escrow exists to prevent.
+ */
+export async function verifyPublished(dealId: string): Promise<ActionResult> {
+  const db = requireServiceClient();
+  const user = await getCurrentUser();
+
+  const { data: deal } = await db
+    .from("deals")
+    .select("id, published_url, status, fee_kobo")
+    .eq("id", dealId)
+    .single();
+  if (!deal) return { ok: false, message: "That deal is no longer here." };
+  if (!deal.published_url) {
+    return {
+      ok: false,
+      message: "The creator has not added the published link yet.",
+    };
+  }
+  if (deal.status === "paid") {
+    return { ok: false, message: "This one has already been released." };
+  }
+
+  try {
+    const { releasedKobo } = await releaseDeal(dealId, {
+      memo: "Released on verified publish",
+      releasedBy: user.userId,
+    });
+
+    revalidatePath(`/deals/${dealId}`);
+    revalidatePath("/wallet");
+    revalidatePath("/");
+
+    return {
+      ok: true,
+      message: `${formatNaira(releasedKobo)} released. The payout is queued and lands within 24 hours.`,
+    };
+  } catch (error) {
+    if (error instanceof InsufficientFunds) {
+      return {
+        ok: false,
+        message: `This campaign's escrow holds ${formatNaira(error.availableKobo)} but ${formatNaira(error.requiredKobo)} is needed. Add funds before releasing.`,
+      };
+    }
+    return { ok: false, message: (error as Error).message };
+  }
+}

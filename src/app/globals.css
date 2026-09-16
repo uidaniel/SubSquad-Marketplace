@@ -154,3 +154,55 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ==========================================================================
+   Shimmer
+
+   A sweep of light across a placeholder block. It is a utility rather than a
+   component style so any shape can use it — the skeletons are built to the
+   proportions of the real content, and the shimmer just tells you it is coming.
+
+   The global reduced-motion rule stops the sweep; the block stays visible, so
+   the layout still reads as loading rather than as empty.
+   ========================================================================== */
+
+@layer utilities {
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-line);
+  }
+
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--color-surface) 85%, transparent),
+      transparent
+    );
+    animation: shimmer-sweep 1.6s ease-in-out infinite;
+  }
+
+  /* On the dark rail the sweep has to lighten rather than whiten. */
+  .shimmer-dark {
+    background-color: color-mix(in oklab, var(--color-chrome-ink) 12%, transparent);
+  }
+  .shimmer-dark::after {
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--color-chrome-ink) 14%, transparent),
+      transparent
+    );
+  }
+}
+
+@keyframes shimmer-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
