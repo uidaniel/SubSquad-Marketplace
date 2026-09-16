@@ -100,6 +100,60 @@ export async function sendMessage(
   }
 }
 
+/**
+ * A message the recipient just asked for — a one-time code, a receipt.
+ *
+ * This deliberately skips the outreach policy. That policy exists to stop the
+ * platform pestering creators who never asked to hear from it; applying it to a
+ * code somebody requested two seconds ago would mean a creator who was invited
+ * this week could not sign in. DRY_RUN still applies — the switch between a
+ * development machine and a real phone is never bypassed.
+ */
+export async function sendTransactional(request: {
+  channel: "whatsapp" | "email";
+  to: { phone?: string | null; email?: string | null };
+  body: string;
+  subject?: string;
+  /** Names the message in the dry-run log, so it is obvious what would go out. */
+  label: string;
+}): Promise<SendOutcome> {
+  if (request.channel === "whatsapp" && !request.to.phone) {
+    return { sent: false, reason: "no_channel", detail: "No phone number." };
+  }
+  if (request.channel === "email" && !request.to.email) {
+    return { sent: false, reason: "no_channel", detail: "No email address." };
+  }
+
+  if (env.DRY_RUN) {
+    console.info(
+      `[dry-run] would send ${request.channel} (${request.label}):\n${request.body}\n`,
+    );
+    return {
+      sent: true,
+      providerMessageId: `dryrun_${Date.now().toString(36)}`,
+      dryRun: true,
+    };
+  }
+
+  try {
+    const providerMessageId =
+      request.channel === "whatsapp"
+        ? await sendWhatsApp(request.to.phone!, request.body)
+        : await sendEmail(
+            request.to.email!,
+            request.subject ?? "SubSquad",
+            request.body,
+          );
+    return { sent: true, providerMessageId, dryRun: false };
+  } catch (error) {
+    return {
+      sent: false,
+      reason: "provider_error",
+      detail: (error as Error).message,
+    };
+  }
+}
+
 /* ==========================================================================
    Providers
    ========================================================================== */

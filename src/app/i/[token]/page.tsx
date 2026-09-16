@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Check, Lock, ShieldCheck } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { InviteActions } from "./invite-actions";
 import { getInviteByToken } from "@/lib/data/creator-queries";
 import { formatNaira } from "@/lib/money";
 import { formatDate, formatRelative } from "@/lib/utils";
@@ -122,17 +122,11 @@ export default async function InvitePage({
       {/* One decision, pinned where a thumb is. */}
       <div className="fixed inset-x-0 bottom-0 border-t border-line bg-ground/95 px-4 py-3 backdrop-blur-md">
         <div className="mx-auto w-full max-w-[560px]">
-          <Button variant="brand" size="lg" block>
-            Accept — {formatNaira(deal.feeKobo)}
-          </Button>
-          <div className="mt-2 flex gap-2">
-            <Button variant="outline" block>
-              Ask for more
-            </Button>
-            <Button variant="ghost" block>
-              Not for me
-            </Button>
-          </div>
+          <InviteActions
+            token={token}
+            feeKobo={deal.feeKobo}
+            rateBandMaxKobo={campaign?.rateBandMaxKobo ?? null}
+          />
         </div>
       </div>
     </main>
