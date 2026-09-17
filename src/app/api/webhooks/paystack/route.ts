@@ -65,12 +65,22 @@ export async function POST(request: Request) {
 
   // Every verified event is recorded before it is acted on, so there is a trail
   // even for the ones that then fail to apply.
-  await db.from("webhook_events").insert({
+  //
+  // The error is logged rather than thrown: a payment that Paystack has already
+  // taken must still be credited even if the trail cannot be written. It must
+  // not be *silent*, though — this table did not exist in production for a day
+  // and the only sign was an audit log that stayed empty.
+  const { error: trailError } = await db.from("webhook_events").insert({
     provider: "paystack",
     event_type: event.event,
     reference: event.data.reference ?? event.data.transfer_code ?? null,
     payload: event as unknown as Record<string, unknown>,
   });
+  if (trailError) {
+    console.error(
+      `[paystack] could not record ${event.event} in webhook_events: ${trailError.message}`,
+    );
+  }
 
   try {
     switch (event.event) {

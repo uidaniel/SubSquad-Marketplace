@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Topbar } from "@/components/app/topbar";
 import { Page, PageHead, StatStrip } from "@/components/app/page-head";
 import { Badge } from "@/components/ui/badge";
@@ -42,16 +42,6 @@ const ACCOUNT_LABELS: Record<string, string> = {
   dispute_reserve: "Dispute reserve",
   paystack_clearing: "Bank",
   payout_clearing: "Payout in transit",
-};
-
-const TYPE_LABELS: Record<string, { label: string; tone: "ok" | "info" | "neutral" | "warn" }> = {
-  deposit: { label: "Deposit", tone: "ok" },
-  lock: { label: "Funded campaign", tone: "info" },
-  release: { label: "Released to creator", tone: "info" },
-  fee: { label: "Platform fee", tone: "neutral" },
-  payout: { label: "Payout", tone: "info" },
-  refund: { label: "Refund", tone: "warn" },
-  reserve: { label: "Dispute settlement", tone: "warn" },
 };
 
 export default async function WalletPage() {
@@ -141,16 +131,14 @@ export default async function WalletPage() {
               <Table>
                 <THead>
                   <TR className="hover:bg-transparent">
-                    <TH className="w-[38%]">What happened</TH>
-                    <TH className="hidden lg:table-cell">From</TH>
-                    <TH className="hidden lg:table-cell">To</TH>
+                    <TH>What happened</TH>
                     <TH numeric>Amount</TH>
                     <TH numeric className="hidden sm:table-cell">When</TH>
                   </TR>
                 </THead>
                 <TBody>
                   {transactions.length === 0 ? (
-                    <TableEmpty colSpan={5}>
+                    <TableEmpty colSpan={3}>
                       Nothing yet. Add funds to get started.
                     </TableEmpty>
                   ) : (
@@ -166,38 +154,33 @@ export default async function WalletPage() {
                       const toIdx = transaction.entries.findIndex(
                         (e) => e.amountKobo > 0,
                       );
-                      const meta = TYPE_LABELS[transaction.type] ?? {
-                        label: transaction.type,
-                        tone: "neutral" as const,
-                      };
+                      const from = ACCOUNT_LABELS[accounts[fromIdx]?.kind ?? ""];
+                      const to = ACCOUNT_LABELS[accounts[toIdx]?.kind ?? ""];
+
+                      // Money that has left the wallet is written as a negative.
+                      // "Held in escrow" is still the client's money, but it is
+                      // no longer spendable, and the row should read that way.
+                      const leftTheWallet =
+                        accounts[fromIdx]?.kind === "space_wallet";
+
                       return (
                         <TR key={transaction.id}>
                           <TD>
                             <CellMain>{transaction.memo}</CellMain>
                             <CellSub>
-                              {transaction.createdBy ?? "Automatic"}
-                              {transaction.reference ? ` · ${transaction.reference}` : ""}
+                              {from && to ? `${from} → ${to}` : (to ?? from ?? "")}
                             </CellSub>
                           </TD>
-                          <TD className="hidden lg:table-cell">
-                            <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-2">
-                              <ArrowUpRight className="size-3.5 text-ink-3" />
-                              {ACCOUNT_LABELS[accounts[fromIdx]?.kind ?? ""] ?? "—"}
-                            </span>
-                          </TD>
-                          <TD className="hidden lg:table-cell">
-                            <span className="inline-flex items-center gap-1.5 text-[12.5px] text-ink-2">
-                              <ArrowDownLeft className="size-3.5 text-ok" />
-                              {ACCOUNT_LABELS[accounts[toIdx]?.kind ?? ""] ?? "—"}
-                            </span>
-                          </TD>
                           <TD numeric>
-                            <CellMain className="tabular-nums">
+                            <CellMain
+                              className={cn(
+                                "tabular-nums",
+                                leftTheWallet ? "text-ink-2" : "text-ok",
+                              )}
+                            >
+                              {leftTheWallet ? "−" : "+"}
                               {formatNaira(amount)}
                             </CellMain>
-                            <Badge tone={meta.tone} className="mt-0.5">
-                              {meta.label}
-                            </Badge>
                           </TD>
                           <TD numeric className="hidden sm:table-cell">
                             <CellSub>{formatDate(transaction.createdAt)}</CellSub>

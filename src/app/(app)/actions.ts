@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireServiceClient } from "@/lib/supabase/service";
-import { accountFor, InsufficientFunds, post } from "@/lib/ledger/post";
+import { accountFor, balanceOf, InsufficientFunds, post } from "@/lib/ledger/post";
 import { buildDeposit, buildLock, fundingRequiredFor } from "@/lib/ledger/transactions";
 import { releaseDeal } from "@/lib/deals/release";
 import { checkSendAllowed } from "@/lib/messaging/policy";
@@ -139,23 +139,48 @@ export async function fundCampaign(campaignId: string): Promise<ActionResult> {
       campaignId: campaign.id,
     });
 
-    await post(
+    // Already funded is a normal thing to ask for, not a failure: a second tab,
+    // a back button, a double tap on a slow connection. It must never post a
+    // second lock — that is the client's money leaving the wallet twice.
+    const alreadyHeld = await balanceOf(escrow);
+    if (alreadyHeld >= required) {
+      return {
+        ok: true,
+        message: `${formatNaira(alreadyHeld)} is already locked in escrow for this campaign. Nothing further was taken.`,
+      };
+    }
+
+    const result = await post(
       buildLock({
         spaceWalletAccountId: wallet,
         escrowAccountId: escrow,
-        amountKobo: required,
+        amountKobo: required - alreadyHeld,
         memo: `Funded ${campaign.name}`,
+        // The ledger's own guard, in case two requests get past the check above
+        // at the same moment. One campaign, one lock.
+        reference: `lock:${campaign.id}`,
       }),
       { createdBy: user.userId, requireFunds: [wallet] },
     );
+
+    if (result.alreadyApplied) {
+      return {
+        ok: true,
+        message: "This campaign was already funded. Nothing further was taken.",
+      };
+    }
 
     await db
       .from("campaigns")
       .update({ status: "funded", budget_kobo: required })
       .eq("id", campaign.id);
 
+    // The funding screen itself was missing here, so it went on offering a
+    // button to lock money that was already locked.
+    revalidatePath(`/campaigns/${campaign.id}/fund`);
     revalidatePath(`/campaigns/${campaign.id}`);
     revalidatePath("/campaigns");
+    revalidatePath("/wallet");
     revalidatePath("/");
 
     return {

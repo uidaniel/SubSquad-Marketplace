@@ -1,6 +1,7 @@
 import "server-only";
 
 import { requireServiceClient } from "@/lib/supabase/service";
+
 import { assertBalanced, LedgerError, type DraftTransaction } from "./transactions";
 import type { Kobo } from "@/lib/money";
 
@@ -181,11 +182,19 @@ export async function accountFor(
   const { data: found } = await query.maybeSingle();
   if (found) return found.id;
 
+  // An account with no org_id is invisible to its own org: `ledger_accounts_read`
+  // requires `org_id is not null and is_org_member(org_id)`, and the policies on
+  // entries and transactions hang off the same check. The Paystack webhook knows
+  // the space a deposit is for but has no reason to know the org behind it, so
+  // asking every caller to pass one is a rule that will be broken again — a real
+  // deposit posted correctly and the wallet still showed ₦0.
+  const orgId = scope.orgId ?? (await orgBehind(scope));
+
   const { data: created, error } = await db
     .from("ledger_accounts")
     .insert({
       kind,
-      org_id: scope.orgId ?? null,
+      org_id: orgId,
       space_id: scope.spaceId ?? null,
       campaign_id: scope.campaignId ?? null,
       creator_id: scope.creatorId ?? null,
@@ -196,4 +205,57 @@ export async function accountFor(
 
   if (error) throw new LedgerError(`could not open a ${kind} account: ${error.message}`);
   return created.id;
+}
+
+/**
+ * Which org an account belongs to, worked out from what it is scoped to.
+ *
+ * Returns null legitimately for the platform's own accounts — clearing, fees,
+ * the dispute reserve — and for a deal a creator brought in themselves, which
+ * has no agency behind it. Those are meant to be invisible to every org.
+ */
+async function orgBehind(scope: {
+  spaceId?: string | null;
+  campaignId?: string | null;
+  dealId?: string | null;
+}): Promise<string | null> {
+  const db = requireServiceClient();
+
+  if (scope.spaceId) {
+    const { data } = await db
+      .from("spaces")
+      .select("org_id")
+      .eq("id", scope.spaceId)
+      .maybeSingle();
+    return data?.org_id ?? null;
+  }
+
+  if (scope.campaignId) {
+    const { data } = await db
+      .from("campaigns")
+      .select("org_id")
+      .eq("id", scope.campaignId)
+      .maybeSingle();
+    return data?.org_id ?? null;
+  }
+
+  if (scope.dealId) {
+    // Two hops rather than an embedded select: Supabase types the embedding as
+    // an array of an inferred shape, and unwrapping it here buys nothing.
+    const { data: deal } = await db
+      .from("deals")
+      .select("campaign_id")
+      .eq("id", scope.dealId)
+      .maybeSingle();
+    if (!deal?.campaign_id) return null;
+
+    const { data: campaign } = await db
+      .from("campaigns")
+      .select("org_id")
+      .eq("id", deal.campaign_id)
+      .maybeSingle();
+    return campaign?.org_id ?? null;
+  }
+
+  return null;
 }

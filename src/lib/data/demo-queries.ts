@@ -150,6 +150,18 @@ function nextActionFor(campaign: Campaign, deals: typeof DEMO_DEALS): NextAction
     };
   }
 
+  // Funded, and nobody picked yet. See the note in supabase-queries.ts: without
+  // this the campaign has no next step after funding at all.
+  if (deals.length === 0) {
+    return {
+      label: "Build the shortlist",
+      detail: `${campaign.endBrandName} · escrow is funded, nobody contacted yet`,
+      href: `/campaigns/${campaign.id}/shortlist`,
+      tone: "warn",
+      urgency: 95,
+    };
+  }
+
   const awaitingReview = deals.filter((d) => d.status === "draft_submitted").length;
   if (awaitingReview > 0) {
     return {

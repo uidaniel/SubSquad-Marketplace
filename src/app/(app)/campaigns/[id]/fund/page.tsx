@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Lock } from "lucide-react";
+import { CheckCircle2, Lock } from "lucide-react";
 import { Topbar } from "@/components/app/topbar";
 import { Page, PageHead } from "@/components/app/page-head";
 import { ActionButton } from "@/components/app/action-button";
@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Panel, PanelBody, PanelFooter, PanelHeader, PanelTitle } from "@/components/ui/panel";
 import { requireServiceClient } from "@/lib/supabase/service";
 import { env } from "@/lib/env";
-import { getCampaignSummary, getCurrentUser, getWalletBalances } from "@/lib/data/queries";
+import {
+  getCampaignEscrow,
+  getCampaignSummary,
+  getCurrentUser,
+  getWalletBalances,
+} from "@/lib/data/queries";
 import { fundingRequiredFor } from "@/lib/ledger/transactions";
 import { formatNaira } from "@/lib/money";
 import { cn } from "@/lib/utils";
@@ -38,13 +43,22 @@ export default async function FundPage({
 
   const { campaign } = summary;
   const wallet = wallets.find((w) => w.space.id === campaign.spaceId);
-  const slots = await slotsFor(campaign.id);
+  const [slots, inEscrow] = await Promise.all([
+    slotsFor(campaign.id),
+    getCampaignEscrow(campaign.id),
+  ]);
 
   const creatorFees = slots.reduce((s, x) => s + x.feeKobo * x.count, 0);
   const required = creatorFees > 0 ? fundingRequiredFor(creatorFees, campaign.platformFeeBps) : 0;
   const platformFee = required - creatorFees;
   const available = wallet?.availableKobo ?? 0;
-  const shortfall = Math.max(0, required - available);
+
+  // What is still owed, not what the campaign costs. Offering to lock the full
+  // amount again on a funded campaign is how the same ₦224,000 left a wallet
+  // twice — the button was live because the page never asked this question.
+  const outstanding = Math.max(0, required - inEscrow);
+  const funded = required > 0 && outstanding === 0;
+  const shortfall = Math.max(0, outstanding - available);
 
   return (
     <>
@@ -109,6 +123,15 @@ export default async function FundPage({
           </PanelBody>
 
           <div className="border-t border-line px-5 py-4">
+            {inEscrow > 0 && (
+              <div className="mb-3 flex items-baseline justify-between gap-4 text-[13.5px]">
+                <span className="text-ink-2">Already locked in escrow</span>
+                <span className="font-medium tabular-nums text-ok">
+                  {formatNaira(inEscrow)}
+                </span>
+              </div>
+            )}
+
             <div className="flex items-baseline justify-between gap-4 text-[13.5px]">
               <span className="text-ink-2">{summary.spaceName}&apos;s wallet holds</span>
               <span
@@ -121,7 +144,31 @@ export default async function FundPage({
               </span>
             </div>
 
-            {shortfall > 0 ? (
+            {funded ? (
+              <div className="mt-4 rounded-[var(--radius-sm)] border border-ok/25 bg-ok-soft px-4 py-4">
+                <p className="flex items-center gap-2 text-[14px] font-medium text-ok">
+                  <CheckCircle2 className="size-4 shrink-0" />
+                  This campaign is funded
+                </p>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-ink-2">
+                  {formatNaira(inEscrow)} is held in escrow and cannot be spent on
+                  anything else. Creators can be contacted now — that is the
+                  message that gets replies.
+                </p>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <Button size="sm" asChild>
+                    <Link href={`/campaigns/${campaign.id}/shortlist`}>
+                      Build the shortlist
+                    </Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/campaigns/${campaign.id}`}>
+                      Back to the campaign
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            ) : shortfall > 0 ? (
               <div className="mt-4 rounded-[var(--radius-sm)] bg-danger-soft px-3 py-3 text-[13px] leading-relaxed text-danger">
                 <p className="font-medium">
                   {formatNaira(shortfall)} short.
@@ -143,9 +190,13 @@ export default async function FundPage({
                     variant="brand"
                     size="lg"
                     block
-                    confirm={`Lock ${formatNaira(required)} in escrow for ${campaign.name}? It stays the client's money and comes back if the campaign is cancelled.`}
+                    confirm={{
+                      title: `Lock ${formatNaira(outstanding)} in escrow?`,
+                      body: `This moves ${formatNaira(outstanding)} out of ${summary.spaceName}'s wallet and holds it against ${campaign.name}. It stays the client's money and returns to their wallet if the campaign is cancelled.`,
+                      confirmLabel: `Lock ${formatNaira(outstanding)}`,
+                    }}
                   >
-                    <Lock /> Lock {formatNaira(required)} in escrow
+                    <Lock /> Lock {formatNaira(outstanding)} in escrow
                   </ActionButton>
                 </div>
               )

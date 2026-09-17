@@ -336,6 +336,22 @@ function nextActionFor(
     };
   }
 
+  // Funded, and nobody picked yet.
+  //
+  // This branch was missing, and its absence was the dead end in the whole
+  // product: after funding, every test below failed too, so the campaign showed
+  // no next step and the shortlist screen — which exists, and is the entire
+  // point of the funding — had nothing anywhere linking to it.
+  if (deals.length === 0) {
+    return {
+      label: "Build the shortlist",
+      detail: `${campaign.endBrandName} · escrow is funded, nobody contacted yet`,
+      href: `/campaigns/${campaign.id}/shortlist`,
+      tone: "warn",
+      urgency: 95,
+    };
+  }
+
   const awaiting = deals.filter((d) => d.status === "draft_submitted").length;
   if (awaiting > 0) {
     return {

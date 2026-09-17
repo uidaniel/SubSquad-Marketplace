@@ -156,10 +156,19 @@ export function buildLock(args: {
   escrowAccountId: string;
   amountKobo: Kobo;
   memo?: string;
+  /**
+   * Pass `lock:<campaign id>` so a campaign can only be locked once.
+   *
+   * Without it the ledger has no way to tell a second press of the button from
+   * a deliberate top-up, and posts both — which is how ₦224,000 left a wallet
+   * twice for one campaign.
+   */
+  reference?: string;
 }): DraftTransaction {
   assertPositiveKobo(args.amountKobo, "lock amount");
   return build({
     type: "lock",
+    reference: args.reference,
     memo: args.memo ?? "Funded campaign escrow",
     entries: [
       { accountId: args.spaceWalletAccountId, amountKobo: -args.amountKobo },
