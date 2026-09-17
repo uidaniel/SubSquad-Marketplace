@@ -3,6 +3,7 @@ import { Page, PageHead } from "@/components/app/page-head";
 import { Panel, PanelBody, PanelHeader, PanelTitle } from "@/components/ui/panel";
 import { getCurrentUser, getWalletBalances } from "@/lib/data/queries";
 import { DepositForm } from "./deposit-form";
+import { CardDeposit } from "./card-deposit";
 
 export const metadata = { title: "Add funds" };
 
@@ -21,9 +22,28 @@ export default async function DepositPage() {
           subtitle="Money sits in a client's wallet until you fund a campaign with it. Nobody is contacted before that happens."
         />
 
+        {/* Card first because it is the one that completes without anybody
+            waiting on a bank, but the transfer form stays directly beneath it:
+            most Nigerian clients still pay by transfer, and burying the way
+            they actually pay behind a tab would be backwards. */}
+        <Panel className="mb-4">
+          <PanelHeader>
+            <PanelTitle>Pay by card or transfer</PanelTitle>
+          </PanelHeader>
+          <PanelBody>
+            <CardDeposit
+              spaces={wallets.map((s) => ({
+                id: s.space.id,
+                name: s.space.name,
+                availableKobo: s.availableKobo,
+              }))}
+            />
+          </PanelBody>
+        </Panel>
+
         <Panel>
           <PanelHeader>
-            <PanelTitle>Record a bank transfer</PanelTitle>
+            <PanelTitle>Record a transfer you already made</PanelTitle>
           </PanelHeader>
           <PanelBody>
             <DepositForm
