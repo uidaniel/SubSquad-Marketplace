@@ -225,21 +225,46 @@ export async function approveShortlist(
 ): Promise<ActionResult> {
   const db = requireServiceClient();
 
+  // `approved` rows are included deliberately, not just `proposed` ones.
+  //
+  // An earlier version marked the whole shortlist approved even when it created
+  // no deals, which left four rows saying "approved" with nothing behind them
+  // and a button that answered "there is nothing left to approve". A row is
+  // only really done when a deal exists for that creator, so that — not the
+  // status column — is what decides here.
   const { data: items } = await db
     .from("shortlist_items")
     .select("*, creators(id, display_name, handle, phone, email, whatsapp_opt_in, do_not_contact, last_contacted_at)")
     .eq("campaign_id", campaignId)
-    .eq("status", "proposed");
+    .in("status", ["proposed", "approved"]);
 
   if (!items?.length) {
     return { ok: false, message: "There is nothing left to approve on this shortlist." };
   }
 
+  const { data: existingDeals } = await db
+    .from("deals")
+    .select("creator_id")
+    .eq("campaign_id", campaignId);
+  const alreadyHasDeal = new Set(
+    (existingDeals ?? []).map((d) => d.creator_id as string),
+  );
+
   const removed = new Set(removedItemIds);
-  const approved = items.filter((i) => !removed.has(i.id));
+  const approved = items.filter(
+    (i) => !removed.has(i.id) && !alreadyHasDeal.has(i.creator_id as string),
+  );
 
   if (approved.length === 0) {
-    return { ok: false, message: "Every creator was removed, so there is nothing to send." };
+    const everyoneInvited = items.every((i) =>
+      alreadyHasDeal.has(i.creator_id as string),
+    );
+    return {
+      ok: false,
+      message: everyoneInvited
+        ? "Everyone on this shortlist already has a deal. Check Outreach for their invites."
+        : "Every creator was removed, so there is nothing to send.",
+    };
   }
 
   const { data: campaign } = await db

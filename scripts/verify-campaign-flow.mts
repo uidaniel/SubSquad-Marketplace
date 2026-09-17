@@ -322,6 +322,60 @@ async function main() {
   );
 
 
+  /* ---- 12. approving a shortlist really creates deals and drafts ---------- */
+
+  // The real action, not a hand-rolled insert. Step 8 above inserts a deal
+  // directly, which is exactly why it kept passing while the button on the
+  // screen did nothing.
+  //
+  // The rows are first forced into the broken state a half-failed run leaves
+  // behind — marked `approved` with no deal — because that state is live in the
+  // database right now and the fix has to recover from it, not just avoid
+  // creating it.
+  await db
+    .from("shortlist_items")
+    .update({ status: "approved" })
+    .eq("campaign_id", campaign!.id);
+
+  try {
+    const { approveShortlist } = await import("../src/app/(app)/actions");
+    await approveShortlist(campaign!.id, []);
+  } catch (error) {
+    // `revalidatePath` needs a Next request scope and throws in a plain script.
+    // It runs after every write, so the work is done by the time it fails;
+    // anything else is a real failure.
+    const message = (error as Error).message;
+    if (!/static generation store|revalidatePath|requestAsyncStorage/i.test(message)) {
+      throw error;
+    }
+  }
+
+  const { data: madeDeals } = await db
+    .from("deals")
+    .select("id, status")
+    .eq("campaign_id", campaign!.id);
+
+  const dealIds = (madeDeals ?? []).map((d) => d.id);
+  const { data: madeDrafts } = dealIds.length
+    ? await db
+        .from("deal_messages")
+        .select("id, channel, ai_draft, sent_at")
+        .in("deal_id", dealIds)
+    : { data: [] as { channel: string; ai_draft: boolean; sent_at: string | null }[] };
+
+  const allEmail = (madeDrafts ?? []).every((m) => m.channel === "email");
+  const noneSent = (madeDrafts ?? []).every((m) => m.sent_at === null);
+
+  check(
+    "12. Approving a stuck shortlist creates deals and unsent email drafts",
+    (madeDeals ?? []).length > 0 &&
+      (madeDrafts ?? []).length > 0 &&
+      allEmail &&
+      noneSent,
+    `${(madeDeals ?? []).length} deals, ${(madeDrafts ?? []).length} drafts, all on email: ${allEmail}, none sent: ${noneSent}`,
+  );
+
+
   console.log(
     `\n${failures === 0 ? "All steps passed." : `${failures} step(s) FAILED.`}\n`,
   );
@@ -350,6 +404,15 @@ async function removeEverything() {
 
   const campaignId = cleanup.find((c) => c.table === "campaigns")?.id;
   if (campaignId) {
+    const { data: leftoverDeals } = await db
+      .from("deals")
+      .select("id")
+      .eq("campaign_id", campaignId);
+    const ids = (leftoverDeals ?? []).map((d) => d.id);
+    if (ids.length) {
+      await db.from("deal_messages").delete().in("deal_id", ids);
+      await db.from("deals").delete().in("id", ids);
+    }
     await db.from("shortlist_items").delete().eq("campaign_id", campaignId);
   }
 

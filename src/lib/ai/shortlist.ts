@@ -150,9 +150,28 @@ export async function generateShortlist(
   }
 
   // Replacing rather than appending: regenerating means "this shortlist was
-  // wrong, do it again", and leaving the old proposals behind would quietly
-  // double the list. Approved and removed rows are somebody's decision, so
-  // those stay.
+  // wrong, do it again", and leaving the old rows behind would quietly double
+  // the list.
+  //
+  // Clearing only `proposed` was not enough. A half-failed approval can leave
+  // rows marked `approved` with no deal behind them, and because the pool above
+  // already excludes anyone who has a deal, the model would suggest those same
+  // creators again and the insert would collide on
+  // (campaign_id, creator_id) — "duplicate key value violates unique
+  // constraint", on a screen offering to suggest more.
+  //
+  // So: clear every row for the creators being re-suggested. Their commitment
+  // lives in the deal, and by construction none of them has one.
+  await db
+    .from("shortlist_items")
+    .delete()
+    .eq("campaign_id", campaignId)
+    .in(
+      "creator_id",
+      valid.map((c) => c.creatorId),
+    );
+
+  // Anything still merely proposed from an older run is stale too.
   await db
     .from("shortlist_items")
     .delete()
