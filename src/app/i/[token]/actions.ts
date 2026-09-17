@@ -300,6 +300,22 @@ export async function acceptContract(
     })
     .eq("id", deal.id);
 
+  // Rendered now and stored, rather than on demand later. The point of the
+  // document is to fix what was agreed at this moment; one generated later
+  // would quietly follow any subsequent edit to the campaign.
+  //
+  // A failure here must not undo the acceptance — the creator has agreed and
+  // the record says so. The PDF is regenerable, so it is logged and left.
+  try {
+    const { generateContract } = await import("@/lib/contracts/generate");
+    const result = await generateContract(deal.id as string);
+    if ("error" in result) {
+      console.error("[contract] could not generate", result.error);
+    }
+  } catch (error) {
+    console.error("[contract] could not generate", error);
+  }
+
   revalidatePath(`/i/${token}/onboarding`);
   redirect(`/i/${token}/onboarding?done=1`);
 }
