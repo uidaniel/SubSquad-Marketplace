@@ -407,3 +407,256 @@ know in advance.`,
     }),
   };
 }
+
+/* ==========================================================================
+   The proposal — the first thing a creator ever receives
+   ========================================================================== */
+
+export interface ProposalEmailArgs {
+  creatorFirstName: string;
+  brandName: string;
+  campaignName: string;
+  deliverable: string;
+  /** What the campaign is for, in the brand's own words. */
+  product: string;
+  /** Why this creator specifically — the model's reasoning, shown to them. */
+  whyYou?: string;
+  /** Indicative, not final. The creator names their own rate. */
+  budgetFromKobo: Kobo;
+  budgetToKobo: Kobo;
+  inviteUrl: string;
+  optOutNote?: string;
+}
+
+/**
+ * A proposal, not a contract.
+ *
+ * The first email used to carry a fixed fee, a deadline and a contract link, as
+ * though the creator had already agreed to terms nobody had shown them. That is
+ * the wrong shape for a first approach: they have not seen the brief, have not
+ * priced the work, and do not know the brand.
+ *
+ * So this asks one question — is this interesting? — and gives only what is
+ * needed to answer it: who the brand is, what the work is, the band the budget
+ * sits in, and why they were picked. Terms, deadline and contract follow once
+ * they have said yes and a rate is agreed.
+ *
+ * The escrow line stays. It is the one fact separating this from the hundreds
+ * of unpaid "collab" messages a Nigerian creator already ignores.
+ */
+export function proposalEmail(args: ProposalEmailArgs): EmailContent {
+  const band =
+    args.budgetFromKobo === args.budgetToKobo
+      ? formatNaira(args.budgetToKobo)
+      : `${formatNaira(args.budgetFromKobo)} to ${formatNaira(args.budgetToKobo)}`;
+
+  const why = args.whyYou
+    ? `
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="margin:22px 0 0;border-left:3px solid ${BRAND};">
+              <tr>
+                <td style="padding:2px 0 2px 14px;">
+                  <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:${INK};">Why you</p>
+                  <p style="margin:0;font-size:14px;line-height:1.55;color:${INK_2};">${args.whyYou}</p>
+                </td>
+              </tr>
+            </table>`
+    : "";
+
+  const body = `
+            <p style="margin:0 0 6px;font-size:15px;line-height:1.55;color:${INK};">
+              Hi ${args.creatorFirstName},
+            </p>
+            <p style="margin:0 0 22px;font-size:15px;line-height:1.55;color:${INK_2};">
+              ${args.brandName} is running a campaign and we think you fit it. This is
+              an invitation to look. Nothing is agreed yet.
+            </p>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:${GROUND};border-radius:10px;">
+              <tr>
+                <td style="padding:20px;">
+                  <p style="margin:0 0 4px;font-size:13px;color:${INK_2};">Budget for this slot</p>
+                  <p style="margin:0;font-size:28px;line-height:1.15;font-weight:700;color:${INK};letter-spacing:-0.02em;">
+                    ${band}
+                  </p>
+                  <p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:${INK_2};">
+                    You name your own rate when you reply. The money is already in
+                    escrow, so it is not a budget that can quietly disappear.
+                  </p>
+                </td>
+              </tr>
+            </table>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 0;">
+              ${row("Brand", args.brandName)}
+              ${row("Campaign", args.campaignName)}
+              ${row("What they want", args.deliverable)}
+              ${row("About", args.product, true)}
+            </table>
+${why}
+            ${button(args.inviteUrl, "Review this invitation")}
+
+            <p style="margin:22px 0 0;font-size:13.5px;line-height:1.55;color:${INK_2};">
+              You will see the full brief, the deadlines and the terms before you
+              agree to anything. If it is not for you, decline on the same page. It
+              takes one tap and we will not chase you.
+            </p>`;
+
+  // The plain-text alternative. Spam filters read it, and a creator on a cheap
+  // Android mail client may see only this.
+  const text = [
+    `Hi ${args.creatorFirstName},`,
+    ``,
+    `${args.brandName} is running a campaign and we think you fit it. This is an`,
+    `invitation to look — nothing is agreed yet.`,
+    ``,
+    `Budget for this slot: ${band}`,
+    `You name your own rate when you reply. The money is already in escrow.`,
+    ``,
+    `Brand: ${args.brandName}`,
+    `Campaign: ${args.campaignName}`,
+    `What they want: ${args.deliverable}`,
+    `About: ${args.product}`,
+    ...(args.whyYou ? [``, `Why you: ${args.whyYou}`] : []),
+    ``,
+    `Review this invitation: ${args.inviteUrl}`,
+    ``,
+    `You will see the full brief, the deadlines and the terms before you agree to`,
+    `anything. If it is not for you, decline on the same page.`,
+    ``,
+    `We will never ask you for a password, a bank PIN, or a code by email.`,
+  ].join("\n");
+
+  return {
+    subject: `${args.brandName} wants to work with you`,
+    text,
+    html: shell({
+      preheader: `${args.deliverable} for ${args.brandName}. Budget is already in escrow.`,
+      body,
+      footerNote: args.optOutNote,
+    }),
+  };
+}
+
+/* ==========================================================================
+   The deal — sent once a rate is agreed
+   ========================================================================== */
+
+export interface DealAgreedEmailArgs {
+  creatorFirstName: string;
+  brandName: string;
+  campaignName: string;
+  deliverable: string;
+  feeKobo: Kobo;
+  deadline: string;
+  mustInclude: string[];
+  mustAvoid: string[];
+  disclosureTag: string;
+  usageRightsDays: number;
+  dealUrl: string;
+}
+
+/**
+ * The second email: the terms, now that there are terms.
+ *
+ * This is what the old invite email tried to be, and it belongs here — after
+ * the creator has said yes and a fee is agreed. Everything in it now binds
+ * them, so it is stated in full rather than summarised behind a link.
+ */
+export function dealAgreedEmail(args: DealAgreedEmailArgs): EmailContent {
+  const fee = formatNaira(args.feeKobo);
+
+  const list = (items: string[]) =>
+    items.length
+      ? items
+          .map(
+            (item) =>
+              `<li style="margin:0 0 6px;font-size:14px;line-height:1.55;color:${INK_2};">${item}</li>`,
+          )
+          .join("")
+      : `<li style="margin:0;font-size:14px;color:${INK_3};">Nothing specified.</li>`;
+
+  const body = `
+            <p style="margin:0 0 6px;font-size:15px;line-height:1.55;color:${INK};">
+              Hi ${args.creatorFirstName},
+            </p>
+            <p style="margin:0 0 22px;font-size:15px;line-height:1.55;color:${INK_2};">
+              It is agreed. ${args.brandName} has confirmed your rate, and ${fee} is
+              held in escrow with your name on it.
+            </p>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:${GROUND};border-radius:10px;">
+              <tr>
+                <td style="padding:20px;">
+                  <p style="margin:0 0 4px;font-size:13px;color:${INK_2};">You will be paid</p>
+                  <p style="margin:0;font-size:34px;line-height:1.1;font-weight:700;color:${INK};letter-spacing:-0.03em;">
+                    ${fee}
+                  </p>
+                  <p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:${INK_2};">
+                    Released to your bank automatically once your post is live and verified.
+                  </p>
+                </td>
+              </tr>
+            </table>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:22px 0 0;">
+              ${row("Campaign", args.campaignName)}
+              ${row("Deliverable", args.deliverable)}
+              ${row("Due", args.deadline)}
+              ${row("Disclosure", `${args.disclosureTag} is required by ARCON`)}
+              ${row("Usage rights", `${args.usageRightsDays} days`, true)}
+            </table>
+
+            <p style="margin:24px 0 8px;font-size:14px;font-weight:600;color:${INK};">Your post must include</p>
+            <ul style="margin:0;padding:0 0 0 20px;">${list(args.mustInclude)}</ul>
+
+            <p style="margin:20px 0 8px;font-size:14px;font-weight:600;color:${INK};">It must never</p>
+            <ul style="margin:0;padding:0 0 0 20px;">${list(args.mustAvoid)}</ul>
+
+            ${button(args.dealUrl, "Sign and start")}
+
+            <p style="margin:22px 0 0;font-size:13.5px;line-height:1.55;color:${INK_2};">
+              Read the agreement before you sign. It is short, and it is what makes
+              the escrow enforceable. Nothing is due from you until you have signed.
+            </p>`;
+
+  const plainList = (items: string[]) =>
+    items.length ? items.map((i) => `  - ${i}`).join("\n") : "  - Nothing specified.";
+
+  const text = [
+    `Hi ${args.creatorFirstName},`,
+    ``,
+    `It is agreed. ${args.brandName} has confirmed your rate, and ${fee} is held in`,
+    `escrow with your name on it.`,
+    ``,
+    `You will be paid: ${fee}`,
+    `Released to your bank automatically once your post is live and verified.`,
+    ``,
+    `Campaign: ${args.campaignName}`,
+    `Deliverable: ${args.deliverable}`,
+    `Due: ${args.deadline}`,
+    `Disclosure: ${args.disclosureTag} is required by ARCON`,
+    `Usage rights: ${args.usageRightsDays} days`,
+    ``,
+    `Your post must include:`,
+    plainList(args.mustInclude),
+    ``,
+    `It must never:`,
+    plainList(args.mustAvoid),
+    ``,
+    `Sign and start: ${args.dealUrl}`,
+    ``,
+    `We will never ask you for a password, a bank PIN, or a code by email.`,
+  ].join("\n");
+
+  return {
+    subject: `Agreed — ${fee} from ${args.brandName}`,
+    text,
+    html: shell({
+      preheader: `${fee} is held for you. Here are the terms.`,
+      body,
+    }),
+  };
+}

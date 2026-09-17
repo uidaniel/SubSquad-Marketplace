@@ -546,20 +546,52 @@ export async function approveMessage(
   if (message.channel === "email") {
     const { data: deal } = await db
       .from("deals")
-      .select("fee_kobo, invite_token, deadline, campaigns(end_brand_name)")
+      .select(
+        "fee_kobo, invite_token, deadline, status, campaign_id, campaigns(name, end_brand_name, brief, rate_band_min_kobo, rate_band_max_kobo)",
+      )
       .eq("id", message.deal_id)
       .maybeSingle();
 
     if (deal) {
-      const { inviteEmail } = await import("@/lib/messaging/email-templates");
+      const { proposalEmail } = await import("@/lib/messaging/email-templates");
       const { creatorUrl } = await import("@/lib/domains");
-      const campaign = one(deal.campaigns);
-      const mail = inviteEmail({
+      const { toBrief } = await import("@/lib/data/brief");
+      const campaign = one(deal.campaigns) as
+        | {
+            name?: string;
+            end_brand_name?: string;
+            brief?: unknown;
+            rate_band_min_kobo?: number;
+            rate_band_max_kobo?: number;
+          }
+        | undefined;
+      const brief = toBrief(campaign?.brief);
+
+      // The first email is a proposal, not a contract.
+      //
+      // It used to carry a fixed fee, a deadline and a contract link, as though
+      // the creator had already agreed terms nobody had shown them. They have
+      // not seen the brief and have not priced the work, so this asks one
+      // question — is this interesting? — and the terms follow once they say yes
+      // and a rate is agreed.
+      const { data: shortlisted } = await db
+        .from("shortlist_items")
+        .select("ai_reasoning")
+        .eq("creator_id", creatorId)
+        .eq("campaign_id", deal.campaign_id ?? "")
+        .maybeSingle();
+
+      const mail = proposalEmail({
         creatorFirstName: String(creator.display_name ?? "there").split(" ")[0],
-        brandName: (campaign?.end_brand_name as string) ?? "A brand",
+        brandName: campaign?.end_brand_name ?? "A brand",
+        campaignName: campaign?.name ?? "a campaign",
         deliverable: "1 video",
-        feeKobo: Number(deal.fee_kobo),
-        deadline: deal.deadline ? formatDate(deal.deadline as string) : "the agreed date",
+        product: brief.product || "See the brief for details.",
+        whyYou: (shortlisted?.ai_reasoning as string | undefined) ?? undefined,
+        budgetFromKobo:
+          Number(campaign?.rate_band_min_kobo) || Number(deal.fee_kobo),
+        budgetToKobo:
+          Number(campaign?.rate_band_max_kobo) || Number(deal.fee_kobo),
         inviteUrl: creatorUrl(`/i/${deal.invite_token}`),
       });
       body = mail.html;
