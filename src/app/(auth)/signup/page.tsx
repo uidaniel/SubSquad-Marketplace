@@ -24,6 +24,18 @@ export default function SignupPage() {
         Free to open. You are charged 12% when a deal completes, and nothing
         before that — no subscription, no fee to browse.
       </p>
+
+      {/* Named before the account exists, not buried in a settings page after. */}
+      <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">
+        Opening an account means you accept our{" "}
+        <Link
+          href="/legal/terms"
+          className="font-medium text-brand-ink underline underline-offset-2"
+        >
+          terms of service
+        </Link>
+        .
+      </p>
     </>
   );
 }

@@ -195,6 +195,13 @@ export default function CreatorAgreementPage() {
         >
           Back to SubSquad
         </Link>
+        {" · "}
+        <Link
+          href="/legal/terms"
+          className="font-medium text-brand-ink underline underline-offset-2"
+        >
+          Terms of service
+        </Link>
       </p>
     </main>
   );
