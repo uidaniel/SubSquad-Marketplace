@@ -63,13 +63,22 @@ async function audit(page, width) {
       if (lines >= 3) findings.push(`page title wraps onto ${lines} lines`);
     }
 
-    // Columns too narrow to read. Grids are the usual culprit.
+    // Columns too narrow to read.
+    //
+    // Judged on the widest column, not the narrowest: a row of
+    // [1fr 90px 140px auto] has a 36px column on purpose — it holds a button —
+    // and flagging that called a correct layout broken. A row where even the
+    // widest column cannot hold a few words is the real problem.
     for (const grid of document.querySelectorAll("dl, .grid")) {
       const cols = getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean);
       if (cols.length < 2) continue;
-      const narrowest = Math.min(...cols.map((c) => parseFloat(c)).filter((n) => !isNaN(n)));
-      if (narrowest > 0 && narrowest < 96) {
-        findings.push(`a ${cols.length}-column grid is only ${Math.round(narrowest)}px per column`);
+      const widths = cols.map((c) => parseFloat(c)).filter((n) => !isNaN(n));
+      if (widths.length === 0) continue;
+      const widest = Math.max(...widths);
+      if (widest < 110 && grid.textContent && grid.textContent.trim().length > 40) {
+        findings.push(
+          `a ${cols.length}-column grid of text is only ${Math.round(widest)}px at its widest`,
+        );
         break;
       }
     }

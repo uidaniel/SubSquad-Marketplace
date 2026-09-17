@@ -96,7 +96,7 @@ export default async function OnboardingPage({
     <main className="mx-auto min-h-screen w-full max-w-[560px] px-4 pb-24 pt-6">
       <header className="mb-6">
         <div className="flex items-center gap-2">
-          <span className="grid size-6 place-items-center rounded-[6px] bg-brand text-[11px] font-bold text-white">
+          <span className="grid size-6 place-items-center rounded-[6px] bg-brand text-[12px] font-bold text-white">
             SS
           </span>
           <span className="text-[15px] font-semibold">SubSquad</span>

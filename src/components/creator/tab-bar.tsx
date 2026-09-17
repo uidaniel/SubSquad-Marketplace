@@ -37,7 +37,7 @@ export function CreatorTabBar({
               href={tab.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-[54px] flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
+                "flex min-h-[54px] flex-1 flex-col items-center justify-center gap-0.5 text-[12px] font-medium transition-colors",
                 active ? "text-ink" : "text-ink-3",
               )}
             >

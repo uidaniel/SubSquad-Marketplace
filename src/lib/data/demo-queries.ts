@@ -424,3 +424,25 @@ export async function getTeam() {
     invites: [] as { id: string; email: string; role: string; expiresAt: string }[],
   };
 }
+
+/** The fixture pipeline. Same shape as the live one. */
+export async function getAllDeals() {
+  return DEMO_DEALS.map((d) => {
+    const creator = DEMO_CREATORS.find((c) => c.id === d.creatorId);
+    const campaign = DEMO_CAMPAIGNS.find((c) => c.id === d.campaignId);
+    return {
+      id: d.id,
+      status: d.status,
+      feeKobo: d.feeKobo,
+      deadline: d.deadline ?? null,
+      publishedAt: d.publishedAt ?? null,
+      proposedFeeKobo: null as number | null,
+      creatorId: d.creatorId,
+      creatorName: creator?.displayName ?? "A creator",
+      creatorHandle: creator?.handle ?? "",
+      campaignId: campaign?.id ?? null,
+      campaignName: campaign?.name ?? "Direct deal",
+      brandName: campaign?.endBrandName ?? "",
+    };
+  });
+}

@@ -337,7 +337,7 @@ function Stat({
 }) {
   return (
     <div>
-      <dt className="text-[11.5px] uppercase tracking-wide text-ink-3">
+      <dt className="text-[12px] uppercase tracking-wide text-ink-3">
         {label}
       </dt>
       <dd

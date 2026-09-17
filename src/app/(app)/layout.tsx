@@ -2,12 +2,14 @@ import { Sidebar, type NavGroup } from "@/components/app/sidebar";
 import {
   getCurrentOrg,
   getCurrentUser,
+  getAllDeals,
   getNeedsAction,
   getOrgMoneySummary,
   getPendingMessageDrafts,
   getSpaces,
 } from "@/lib/data/queries";
 import { formatNaira } from "@/lib/money";
+import { STAGE_META, stageOf } from "@/lib/deals/stages";
 
 /**
  * The org shell.
@@ -21,14 +23,22 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [org, user, spaces, money, needsAction, pendingDrafts] = await Promise.all([
-    getCurrentOrg(),
-    getCurrentUser(),
-    getSpaces(),
-    getOrgMoneySummary(),
-    getNeedsAction(),
-    getPendingMessageDrafts(),
-  ]);
+  const [org, user, spaces, money, needsAction, pendingDrafts, deals] =
+    await Promise.all([
+      getCurrentOrg(),
+      getCurrentUser(),
+      getSpaces(),
+      getOrgMoneySummary(),
+      getNeedsAction(),
+      getPendingMessageDrafts(),
+      getAllDeals(),
+    ]);
+
+  // Only the count that means somebody is waiting on a person. A badge that
+  // counts everything is a badge nobody reads.
+  const awaitingRate = deals.filter(
+    (d) => STAGE_META[stageOf(d.status)].waitingOn === "you",
+  ).length;
 
   const isAgency = org.type === "agency";
 
@@ -41,6 +51,12 @@ export default async function AppLayout({
       label: "Work",
       items: [
         { href: "/campaigns", label: "Campaigns", icon: "campaigns" },
+        {
+          href: "/deals",
+          label: "Deals",
+          icon: "deals",
+          count: awaitingRate || undefined,
+        },
         {
           href: "/approvals",
           label: "Approvals",

@@ -108,7 +108,7 @@ export default async function CreatorsPage() {
                             <div className="flex flex-col items-start gap-1">
                               <ScoreBadge score={score.fraudScore} />
                               {score.reasons.length > 0 && (
-                                <span className="text-[11.5px] text-ink-3">
+                                <span className="text-[12px] text-ink-3">
                                   {score.reasons[0].label}
                                 </span>
                               )}

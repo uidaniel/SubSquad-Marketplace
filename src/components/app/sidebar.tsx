@@ -13,6 +13,7 @@ import {
   Settings,
   Shield,
   Users,
+  Handshake,
 } from "lucide-react";
 import { cn, initialsOf } from "@/lib/utils";
 import { formatNaira } from "@/lib/money";
@@ -44,6 +45,7 @@ export interface NavGroup {
 const ICONS = {
   dashboard: LayoutDashboard,
   campaigns: Receipt,
+  deals: Handshake,
   approvals: Check,
   outreach: MessageSquare,
   creators: Users,
@@ -116,7 +118,7 @@ export function Sidebar({
         href="/"
         className="mb-3 flex items-center gap-2 px-2 py-1 text-[15px] font-semibold text-white"
       >
-        <span className="grid size-7 place-items-center rounded-[6px] bg-brand text-[12px] font-bold text-white lg:size-6 lg:text-[11px]">
+        <span className="grid size-7 place-items-center rounded-[6px] bg-brand text-[12px] font-bold text-white lg:size-6 lg:text-[12px]">
           SS
         </span>
         SubSquad
@@ -131,7 +133,7 @@ export function Sidebar({
       <nav className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none]">
         {groups.map((group) => (
           <div key={group.label} className="mb-4">
-            <p className="px-2.5 pb-1.5 text-[12px] font-medium uppercase tracking-[0.06em] text-chrome-ink/40 lg:text-[11px]">
+            <p className="px-2.5 pb-1.5 text-[12px] font-medium uppercase tracking-[0.06em] text-chrome-ink/40 lg:text-[12px]">
               {group.label}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -161,7 +163,7 @@ export function Sidebar({
                     />
                     <span className="flex-1 truncate">{item.label}</span>
                     {item.count ? (
-                      <span className="rounded-full bg-white/10 px-1.5 text-[12px] tabular-nums lg:text-[11px]">
+                      <span className="rounded-full bg-white/10 px-1.5 text-[12px] tabular-nums lg:text-[12px]">
                         {item.count}
                       </span>
                     ) : null}
@@ -175,11 +177,11 @@ export function Sidebar({
 
       <div className="shrink-0 pt-3">
         <div className="rounded-[var(--radius-sm)] bg-white/[0.06] px-3 py-2.5">
-          <p className="text-[12px] text-chrome-ink/50 lg:text-[11px]">Held in escrow</p>
+          <p className="text-[12px] text-chrome-ink/50 lg:text-[12px]">Held in escrow</p>
           <p className="mt-0.5 text-[17px] font-semibold tabular-nums text-white">
             {formatNaira(escrowKobo)}
           </p>
-          <p className="mt-1 text-[12px] leading-snug text-chrome-ink/45 lg:text-[11px]">
+          <p className="mt-1 text-[12px] leading-snug text-chrome-ink/45 lg:text-[12px]">
             {escrowNote}
           </p>
         </div>
@@ -206,12 +208,12 @@ export function Sidebar({
         <div className="my-3 h-px bg-white/10" />
 
         <div className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5">
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-ok text-[12px] font-semibold text-white lg:size-7 lg:text-[11px]">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-ok text-[12px] font-semibold text-white lg:size-7 lg:text-[12px]">
             {initialsOf(userName)}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] text-white">{userName}</span>
-            <span className="block truncate text-[12.5px] text-chrome-ink/50 lg:text-[11.5px]">
+            <span className="block truncate text-[12.5px] text-chrome-ink/50 lg:text-[12px]">
               {userRole}
             </span>
           </span>

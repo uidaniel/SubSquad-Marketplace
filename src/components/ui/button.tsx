@@ -25,10 +25,13 @@ const buttonVariants = cva(
         link: "text-brand-ink underline-offset-4 hover:underline",
       },
       size: {
-        sm: "h-8 px-3 text-[13px]",
-        default: "h-9 px-4 text-[13.5px]",
+        // 36px is the floor on a phone. `sm` at 32px was comfortable with a
+        // mouse and a miss with a thumb, and the audit found up to eight of
+        // them on a single screen. Desktop keeps the tighter size.
+        sm: "h-9 px-3 text-[13px] sm:h-8",
+        default: "h-10 px-4 text-[13.5px] sm:h-9",
         lg: "h-11 px-6 text-[15px]",
-        icon: "size-9",
+        icon: "size-10 sm:size-9",
       },
       block: { true: "w-full", false: "" },
     },

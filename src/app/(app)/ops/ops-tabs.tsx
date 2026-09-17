@@ -47,7 +47,7 @@ export function OpsTabs({
           >
             {tab.label}
             {count > 0 && (
-              <span className="rounded-full bg-brand px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white tabular-nums">
+              <span className="rounded-full bg-brand px-1.5 py-0.5 text-[12px] font-semibold leading-none text-white tabular-nums">
                 {count}
               </span>
             )}

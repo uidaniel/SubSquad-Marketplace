@@ -18,7 +18,7 @@ export default function CreatorLayout({
       <header className="sticky top-0 z-30 border-b border-line bg-ground/90 backdrop-blur-md">
         <div className="mx-auto flex h-13 w-full max-w-[560px] items-center gap-2 px-4 py-2.5">
           <Link href="/creator" className="flex items-center gap-2">
-            <span className="grid size-6 place-items-center rounded-[6px] bg-brand text-[11px] font-bold text-white">
+            <span className="grid size-6 place-items-center rounded-[6px] bg-brand text-[12px] font-bold text-white">
               SS
             </span>
             <span className="text-[15px] font-semibold">SubSquad</span>

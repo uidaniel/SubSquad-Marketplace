@@ -72,3 +72,4 @@ export async function getCampaignSlots(campaignId: string): Promise<CampaignSlot
   return live.getCampaignSlots(campaignId);
 }
 export const getTeam = () => impl.getTeam();
+export const getAllDeals = () => impl.getAllDeals();

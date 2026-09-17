@@ -167,7 +167,7 @@ function Stat({
       >
         {value}
       </p>
-      <p className="mt-0.5 text-[11.5px] text-ink-2">{label}</p>
+      <p className="mt-0.5 text-[12px] text-ink-2">{label}</p>
     </div>
   );
 }

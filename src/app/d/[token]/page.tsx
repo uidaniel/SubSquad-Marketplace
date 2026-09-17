@@ -44,7 +44,7 @@ export default async function GuestDealPage({
   return (
     <main className="mx-auto min-h-screen w-full max-w-[560px] px-4 pb-32 pt-6">
       <header className="mb-6 flex items-center gap-2">
-        <span className="grid size-6 place-items-center rounded-[6px] bg-brand text-[11px] font-bold text-white">
+        <span className="grid size-6 place-items-center rounded-[6px] bg-brand text-[12px] font-bold text-white">
           SS
         </span>
         <span className="text-[15px] font-semibold">SubSquad</span>
@@ -187,7 +187,7 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="text-[17px] font-semibold tabular-nums tracking-[-0.02em]">
         {value}
       </p>
-      <p className="mt-0.5 text-[11px] text-ink-2">{label}</p>
+      <p className="mt-0.5 text-[12px] text-ink-2">{label}</p>
     </div>
   );
 }

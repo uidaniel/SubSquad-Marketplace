@@ -1,7 +1,7 @@
 import { avatarColour, cn, initialsOf } from "@/lib/utils";
 
 const SIZES = {
-  sm: "size-7 text-[11px]",
+  sm: "size-7 text-[12px]",
   md: "size-9 text-[12.5px]",
   lg: "size-11 text-[15px]",
 } as const;

@@ -160,7 +160,7 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="text-[18px] font-semibold tabular-nums tracking-[-0.02em]">
         {value}
       </p>
-      <p className="mt-0.5 text-[11.5px] text-ink-2">{label}</p>
+      <p className="mt-0.5 text-[12px] text-ink-2">{label}</p>
     </div>
   );
 }

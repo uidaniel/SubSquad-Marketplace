@@ -860,3 +860,50 @@ export async function getTeam() {
     })),
   };
 }
+
+/**
+ * Every deal on this org's campaigns, for the pipeline.
+ *
+ * One query rather than per-campaign, because the question an account exec asks
+ * at nine in the morning is "what is waiting on me", not "how is the PalmPay
+ * campaign doing". RLS scopes this to their own deals.
+ */
+export async function getAllDeals() {
+  const org = await currentOrgRow();
+  const client = await db();
+
+  const { data } = await client
+    .from("deals")
+    .select(
+      "id, status, fee_kobo, deadline, published_at, proposed_fee_kobo, rate_proposed_at, created_at, creators(id, display_name, handle), campaigns(id, name, end_brand_name, org_id)",
+    )
+    .order("created_at", { ascending: false });
+
+  return (data ?? [])
+    .filter((d) => {
+      const campaign = one(d.campaigns) as { org_id?: string } | undefined;
+      return campaign?.org_id === org.id;
+    })
+    .map((d) => {
+      const creator = one(d.creators) as
+        | { id: string; display_name: string; handle: string }
+        | undefined;
+      const campaign = one(d.campaigns) as
+        | { id: string; name: string; end_brand_name: string }
+        | undefined;
+      return {
+        id: d.id as string,
+        status: d.status as DealStatus,
+        feeKobo: Number(d.fee_kobo),
+        deadline: (d.deadline as string | null) ?? null,
+        publishedAt: (d.published_at as string | null) ?? null,
+        proposedFeeKobo: d.proposed_fee_kobo ? Number(d.proposed_fee_kobo) : null,
+        creatorId: creator?.id ?? "",
+        creatorName: creator?.display_name ?? "A creator",
+        creatorHandle: creator?.handle ?? "",
+        campaignId: campaign?.id ?? null,
+        campaignName: campaign?.name ?? "Direct deal",
+        brandName: campaign?.end_brand_name ?? "",
+      };
+    });
+}

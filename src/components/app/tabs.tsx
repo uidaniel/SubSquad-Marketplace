@@ -50,7 +50,7 @@ export function Tabs({
             {tab.count !== undefined && tab.count > 0 && (
               <span
                 className={cn(
-                  "rounded-full px-1.5 text-[11px] tabular-nums",
+                  "rounded-full px-1.5 text-[12px] tabular-nums",
                   isActive ? "bg-ink text-white" : "bg-line text-ink-2",
                 )}
               >

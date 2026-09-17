@@ -79,7 +79,7 @@ export function PayButtons({
         </p>
       )}
 
-      <p className="mt-2 text-center text-[11.5px] text-ink-3">
+      <p className="mt-2 text-center text-[12px] text-ink-3">
         Card, bank transfer or USSD via Paystack.
         {dryRun ? " Test mode — no card is charged." : ""}
       </p>

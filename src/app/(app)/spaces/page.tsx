@@ -80,7 +80,7 @@ export default async function SpacesPage() {
 
                 {live.length > 0 && (
                   <div className="border-t border-line px-5 py-3">
-                    <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-ink-3">
+                    <p className="mb-2 text-[12px] font-medium uppercase tracking-[0.05em] text-ink-3">
                       Running now
                     </p>
                     <ul className="space-y-2">
