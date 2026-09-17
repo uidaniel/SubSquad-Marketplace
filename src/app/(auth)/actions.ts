@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createOrgForUser } from "@/lib/auth/session";
+import { env } from "@/lib/env";
 
 /**
  * Sign in, sign up, sign out.
@@ -63,11 +64,24 @@ export async function signUp(
     return { error: "Use at least 8 characters for your password." };
   }
 
+  // Where to send them afterwards, and whether they are an agency at all.
+  //
+  // A creator arriving from an invite is not signing up a company. Sending them
+  // through "tell us about your organisation" asks a person who makes TikToks
+  // for their CAC number, and it is the wrong question at the worst moment.
+  const next = safeNext(String(formData.get("next") ?? ""));
+  const isCreator = next.startsWith("/i/");
+
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { name } },
+    options: {
+      data: { name, role: isCreator ? "creator" : "org" },
+      // Carried through the confirmation link, so a creator who has to check
+      // their email still lands back on the invite rather than at the door.
+      emailRedirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback?next=${encodeURIComponent(next)}`,
+    },
   });
 
   if (error) {
@@ -77,11 +91,11 @@ export async function signUp(
   // With email confirmation on, there is no session yet and nothing to do until
   // they click the link. Saying so plainly beats a spinner that never resolves.
   if (!data.session) {
-    redirect("/signup/check-email");
+    redirect(`/signup/check-email?next=${encodeURIComponent(next)}`);
   }
 
   revalidatePath("/", "layout");
-  redirect("/signup/org");
+  redirect(isCreator ? next : "/signup/org");
 }
 
 /** The second half of signing up: the company the person is signing up for. */

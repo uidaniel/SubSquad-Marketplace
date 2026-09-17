@@ -16,6 +16,8 @@ import type { Draft } from "@/lib/domain";
 import { applyBps, formatNaira } from "@/lib/money";
 import { cn, formatCount, formatDate, formatPercent, formatRelative } from "@/lib/utils";
 import { approveDraft, verifyPublished } from "../../actions";
+import { RateDecisions } from "../../approvals/rate-decisions";
+import { getPendingRates } from "../../rate-actions";
 
 export const metadata = { title: "Deal" };
 
@@ -33,8 +35,19 @@ export default async function DealPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [summary, user] = await Promise.all([getDeal(id), getCurrentUser()]);
+  const [summary, user, rates] = await Promise.all([
+    getDeal(id),
+    getCurrentUser(),
+    getPendingRates(),
+  ]);
   if (!summary) notFound();
+
+  // The decision, on the page somebody actually opens to make it.
+  //
+  // It was only on /approvals, which is where the queue belongs — but a person
+  // who has clicked into a deal to answer a creator should not have to go and
+  // find a different screen. Same component, same action, both places.
+  const pendingRate = rates.find((r) => r.dealId === id);
 
   const { deal, creator, profile, score, campaignName, endBrandName } = summary;
   const drafts = await draftsFor(deal.id);
@@ -73,6 +86,12 @@ export default async function DealPage({
           }
           actions={<DealStatusBadge status={deal.status} />}
         />
+
+        {pendingRate && (
+          <div className="mb-5">
+            <RateDecisions rates={[pendingRate]} />
+          </div>
+        )}
 
         <StatStrip
           items={[

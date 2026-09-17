@@ -52,8 +52,11 @@ export interface InviteView {
   /** A rate this creator has named and is waiting to hear back on. */
   proposedFeeKobo: Kobo | null;
   rateProposedAt: string | null;
-  /** What the campaign holds in total — evidence the offer is funded. */
-  escrowHeldKobo: Kobo;
+  /**
+   * Whether the money for this deal is held. Deliberately a boolean: the
+   * campaign's total escrow is the agency's business, not the creator's.
+   */
+  feeSecured: boolean;
 }
 
 async function demo_getInviteByToken(token: string): Promise<InviteView | null> {
@@ -82,9 +85,9 @@ async function demo_getInviteByToken(token: string): Promise<InviteView | null> 
     deliverableCount: 1,
     proposedFeeKobo: null,
     rateProposedAt: null,
-    escrowHeldKobo: campaign
-      ? (demoBalances().get(escrowAccountFor(campaign.id)) ?? 0)
-      : deal.feeKobo,
+    feeSecured: campaign
+      ? (demoBalances().get(escrowAccountFor(campaign.id)) ?? 0) >= deal.feeKobo
+      : deal.feeKobo > 0,
   };
 }
 

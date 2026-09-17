@@ -524,6 +524,31 @@ async function main() {
         : "the deal never appeared in the queue",
     );
 
+    // If escrow cannot cover the ask, do what the screen tells an agency to do:
+    // add funds, then accept. The refusal itself is covered by step 15 — this
+    // step is about the loop closing once the money is there.
+    if (mine && !mine.affordable) {
+      await post(
+        buildDeposit({
+          clearingAccountId: clearing,
+          destinationAccountId: wallet,
+          amountKobo: mine.shortfallKobo,
+          reference: `__verify_topup_${stamp}`,
+          memo: "Top-up so the agreed rate is covered",
+        }),
+      );
+      await post(
+        buildLock({
+          spaceWalletAccountId: wallet,
+          escrowAccountId: escrow,
+          amountKobo: mine.shortfallKobo,
+          memo: "Top-up into escrow",
+          reference: `lock:topup:${campaign!.id}`,
+        }),
+        { requireFunds: [wallet] },
+      );
+    }
+
     // No signed-in user in a script, and `rate_agreed_by` is a real foreign key
     // into auth.users — passing an org id here is what exposed the silent write.
     const accepted = await acceptRate(firstDeal.id, null);
@@ -590,15 +615,17 @@ async function main() {
       if (!view.campaign?.brief.product) missing.push("brief.product");
       if (!view.deliverableType) missing.push("deliverableType");
       if (!view.agencyName) missing.push("agencyName");
-      if (view.escrowHeldKobo <= 0) missing.push("escrowHeldKobo");
+      if (!view.feeSecured) missing.push("feeSecured");
+      // The campaign's escrow total must never reach the creator's page.
+      if ("escrowHeldKobo" in view) missing.push("escrowHeldKobo is still exposed");
       if (!view.brandName) missing.push("brandName");
     }
 
     check(
-      "16. The creator deal page has a brief, a deliverable, an agency and escrow",
+      "16. The creator page has the brief and proof of funding, without the campaign total",
       missing.length === 0,
       missing.length === 0
-        ? `${view!.deliverableCount} x ${view!.deliverableType} for ${view!.brandName}, run by ${view!.agencyName}, ${formatNaira(view!.escrowHeldKobo)} held`
+        ? `${view!.deliverableCount} x ${view!.deliverableType} for ${view!.brandName}, run by ${view!.agencyName}, fee secured: ${view!.feeSecured}`
         : `missing: ${missing.join(", ")}`,
     );
   }

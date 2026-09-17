@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireServiceClient } from "@/lib/supabase/service";
 import { env } from "@/lib/env";
 import { sendVerificationCode, verifyCode } from "@/lib/auth/otp";
+import { getSession } from "@/lib/auth/session";
 import {
   normaliseNigerianPhone,
   resolveAccount,
@@ -74,7 +75,31 @@ export async function acceptInvite(token: string): Promise<ActionResult> {
     };
   }
 
+  // Accepting needs an account; looking does not.
+  //
+  // The token proves they were invited, not who they are, and everything after
+  // this point is theirs to come back to — the deal, the draft they upload, the
+  // wallet the money lands in. Without an account none of that is reachable,
+  // and a creator who has signed a contract has nowhere to see it.
+  //
+  // The gate is here rather than on the page on purpose: they read the offer
+  // first and sign up once they have decided it is worth an account.
+  const session = await getSession();
+  if (!session) {
+    redirect(`/signup?next=${encodeURIComponent(`/i/${token}`)}`);
+  }
+
   const db = requireServiceClient();
+
+  // Tie the creator record to the person who just signed in, so the creator app
+  // can find their own deals. `creators.user_id` has existed since the first
+  // migration and nothing ever set it.
+  await db
+    .from("creators")
+    .update({ user_id: session.userId })
+    .eq("id", deal.creator_id)
+    .is("user_id", null);
+
   await db.from("deals").update({ status: "accepted" }).eq("id", deal.id);
 
   revalidatePath(`/i/${token}`);

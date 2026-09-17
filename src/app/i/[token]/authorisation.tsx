@@ -34,7 +34,7 @@ export function Authorisation({
   agencyVerifiedAt,
   brandName,
   campaignName,
-  escrowHeldKobo,
+  feeSecured,
   feeKobo,
 }: {
   agencyName: string | null;
@@ -43,7 +43,8 @@ export function Authorisation({
   agencyVerifiedAt: string | null;
   brandName: string;
   campaignName: string;
-  escrowHeldKobo: number;
+  /** Whether this creator's own fee is covered. Never the campaign total. */
+  feeSecured: boolean;
   feeKobo: number;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -59,13 +60,14 @@ export function Authorisation({
 
       <div className="space-y-2.5 px-4 py-4">
         <Fact
-          proven
-          label={`${formatNaira(escrowHeldKobo)} is held in escrow by SubSquad`}
+          proven={feeSecured}
+          label={
+            feeSecured
+              ? `${formatNaira(feeKobo)} is held in escrow by SubSquad against your slot`
+              : "The budget for this slot is being funded now"
+          }
         />
-        <Fact
-          proven
-          label={`${formatNaira(feeKobo)} of it is reserved against your slot`}
-        />
+        <Fact proven label="SubSquad holds it, not the brand" />
         {agencyVerified ? (
           <Fact
             proven
@@ -118,11 +120,11 @@ export function Authorisation({
                   value={formatDate(agencyVerifiedAt)}
                 />
               )}
+              <Line label="Reserved for you" value={formatNaira(feeKobo)} />
               <Line
                 label="Held in escrow"
-                value={formatNaira(escrowHeldKobo)}
+                value={feeSecured ? "Yes, in full" : "Being funded"}
               />
-              <Line label="Reserved for you" value={formatNaira(feeKobo)} />
             </dl>
 
             <p className="flex gap-2">

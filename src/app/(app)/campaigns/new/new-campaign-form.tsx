@@ -269,7 +269,7 @@ export function NewCampaignForm({
           >
             <span>Deliverable</span>
             <span>Creators</span>
-            <span>Fee each</span>
+            <span>Max each</span>
             <span className="w-9" />
           </div>
 
@@ -301,7 +301,7 @@ export function NewCampaignForm({
               <MoneyInput
                 value={slot.fee}
                 onChange={(e) => update(slot.key, { fee: e.target.value })}
-                aria-label="Fee per creator"
+                aria-label="Most you will pay each creator"
                 placeholder="85,000"
               />
               <Button
@@ -318,10 +318,18 @@ export function NewCampaignForm({
               </Button>
             </div>
           ))}
+          {/* Named as a ceiling, because that is what it is.
+              Labelled "Fee each" it read as a fixed price, and an agency setting
+              it thought they were deciding what every creator would be paid.
+              They are deciding the most any one of them can be paid: creators
+              name their own rate and negotiate under this line. */}
           <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-ink-3">
             <Info className="mt-0.5 size-3.5 shrink-0" />
-            The fee is what each creator receives. It is also the ceiling the AI
-            negotiates under — it will settle below this, never above.
+            This is the <b className="font-medium text-ink-2">most</b> you will pay
+            one creator for this deliverable, not a fixed fee. Creators name their
+            own rate; you accept it, offer a different one, or decline. Nothing is
+            ever agreed above this line, and the totals below assume everyone
+            asks for the maximum.
           </p>
         </PanelBody>
       </Panel>

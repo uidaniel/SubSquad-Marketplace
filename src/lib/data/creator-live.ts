@@ -188,9 +188,21 @@ export async function getInviteByToken(token: string) {
     /** The rate this creator has asked for and is waiting to hear back on. */
     proposedFeeKobo: data.proposed_fee_kobo ? Number(data.proposed_fee_kobo) : null,
     rateProposedAt: (data.rate_proposed_at as string | null) ?? null,
-    // A creator-initiated deal has its escrow per deal rather than per campaign;
-    // what is held for it is simply its own fee.
-    escrowHeldKobo: campaign ? await escrowFor(campaign.id) : deal.feeKobo,
+    /**
+     * Whether *their* fee is covered — not how much the campaign holds.
+     *
+     * This used to return the campaign's whole escrow balance and the page
+     * printed it: "₦952,000 is already locked for this campaign". That hands a
+     * creator the client's entire budget, from which they can work out roughly
+     * how many creators are being hired and at what rate. It is the agency's
+     * commercial information and it is not ours to give away.
+     *
+     * What a creator needs is the answer to one question: is the money for my
+     * work actually there. That is a yes or a no.
+     */
+    feeSecured: campaign
+      ? (await escrowFor(campaign.id)) >= deal.feeKobo
+      : deal.feeKobo > 0,
   };
 }
 

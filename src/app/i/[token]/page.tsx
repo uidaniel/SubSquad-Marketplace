@@ -4,6 +4,7 @@ import { Check, Clock, Lock, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { InviteActions } from "./invite-actions";
 import { Authorisation } from "./authorisation";
+import { TabGroup } from "@/components/ui/tab-group";
 import { getInviteByToken } from "@/lib/data/creator-queries";
 import { formatNaira } from "@/lib/money";
 import { cn, formatDate, formatRelative } from "@/lib/utils";
@@ -62,7 +63,7 @@ export default async function InvitePage({
     deliverableCount,
     proposedFeeKobo,
     rateProposedAt,
-    escrowHeldKobo,
+    feeSecured,
   } = invite;
 
   const active: Tab = TABS.includes(tab as Tab) ? (tab as Tab) : "deal";
@@ -112,7 +113,9 @@ export default async function InvitePage({
         ) : (
           <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-ok-soft px-3 py-1.5 text-[12.5px] font-medium text-ok">
             <Lock className="size-3.5" />
-            {formatNaira(escrowHeldKobo)} is already locked for this campaign
+            {feeSecured
+              ? "This fee is already held in escrow"
+              : "Being funded now"}
           </p>
         )}
 
@@ -129,37 +132,22 @@ export default async function InvitePage({
         agencyVerifiedAt={agencyVerifiedAt}
         brandName={brandName}
         campaignName={campaign?.name ?? "this campaign"}
-        escrowHeldKobo={escrowHeldKobo}
+        feeSecured={feeSecured}
         feeKobo={awaitingBrand ? proposedFeeKobo! : deal.feeKobo}
       />
 
       {/* Three tabs, because one scroll was both too little and too much. */}
-      <nav className="mt-6 flex gap-1 overflow-x-auto border-b border-line">
-        {(
-          [
-            ["deal", "Deal info"],
-            ["content", "What to make"],
-            ["terms", "Terms & payment"],
-          ] as const
-        ).map(([key, label]) => (
-          <Link
-            key={key}
-            href={`/i/${token}?tab=${key}`}
-            scroll={false}
-            className={cn(
-              "shrink-0 border-b-2 px-3 py-2.5 text-[13.5px] font-medium transition-colors",
-              active === key
-                ? "border-ink text-ink"
-                : "border-transparent text-ink-3 hover:text-ink-2",
-            )}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
+      <div className="mt-6">
+        <TabGroup
+          tabs={[
+            { key: "deal", label: "Deal info" },
+            { key: "content", label: "What to make" },
+            { key: "terms", label: "Terms & payment" },
+          ]}
+          initial={active}
+        >
 
-      {active === "deal" && (
-        <div className="space-y-4 pt-4">
+          <div data-tab="deal" className="space-y-4 pt-4">
           <Card title="What they are asking for">
             <Row label="Deliverable" value={deliverable} />
             <Row
@@ -185,11 +173,9 @@ export default async function InvitePage({
           )}
 
           <Timeline deadline={deal.deadline} status={deal.status} />
-        </div>
-      )}
+          </div>
 
-      {active === "content" && (
-        <div className="space-y-4 pt-4">
+          <div data-tab="content" className="space-y-4 pt-4">
           {brief ? (
             <>
               <Card title="Every video must get across">
@@ -226,17 +212,18 @@ export default async function InvitePage({
               </p>
             </Card>
           )}
-        </div>
-      )}
+          </div>
 
-      {active === "terms" && (
-        <div className="space-y-4 pt-4">
+          <div data-tab="terms" className="space-y-4 pt-4">
           <Card title="Payment">
             <Row
               label="Fee"
               value={formatNaira(awaitingBrand ? proposedFeeKobo! : deal.feeKobo)}
             />
-            <Row label="Held in escrow" value={formatNaira(escrowHeldKobo)} />
+            <Row
+              label="Held in escrow"
+              value={feeSecured ? "Yes, in full" : "Being funded"}
+            />
             <Row
               label="Paid"
               value="Automatically, once your post is verified live"
@@ -266,8 +253,9 @@ export default async function InvitePage({
             </Link>
             . It is short, and it is what makes the escrow enforceable.
           </p>
-        </div>
-      )}
+          </div>
+        </TabGroup>
+      </div>
 
       <p className="mt-8 text-[12.5px] text-ink-3">
         Sent to @{creator.handle}. If this is not for you, decline below — we will

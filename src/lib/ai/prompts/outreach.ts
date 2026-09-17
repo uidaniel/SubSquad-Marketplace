@@ -56,7 +56,9 @@ export function inviteDraftUserPrompt(input: {
 Creator: ${input.creatorFirstName} (@${input.creatorHandle})
 Brand: ${input.brandName}
 Asking for: ${input.deliverable}
-Fee: ${formatNaira(input.feeKobo)}
+Budget: confirmed and already held in escrow. Do NOT state a figure — this is a
+first approach and the creator names their own rate. Say the money is held, not
+how much it is.
 Deadline: ${input.deadlineText}
 Accept link: ${input.inviteUrl}
 Channel: ${input.channel}${

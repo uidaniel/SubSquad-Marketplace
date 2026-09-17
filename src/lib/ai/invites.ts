@@ -7,7 +7,7 @@ import {
   inviteDraftSystemPrompt,
   inviteDraftUserPrompt,
 } from "./prompts/outreach";
-import { formatNaira, type Kobo } from "@/lib/money";
+import { type Kobo } from "@/lib/money";
 import { formatDate } from "@/lib/utils";
 
 /**
@@ -28,6 +28,16 @@ export interface InviteDraftInput {
   creatorHandle: string;
   brandName: string;
   deliverable: string;
+  /**
+   * What the campaign has budgeted. Used to decide whether to say anything
+   * about money at all — never printed.
+   *
+   * The first email used to name it: "₦68,000 is already held in escrow". Two
+   * things wrong with that. It is the model's estimate, not an offer anybody
+   * agreed, and it anchors a creator who might charge ₦120,000 to a number we
+   * invented. What survives is the fact that matters — the money is real and
+   * already held — without pricing their work for them.
+   */
   feeKobo: Kobo;
   deadline: string | null;
   inviteUrl: string;
@@ -46,7 +56,7 @@ export function templateInvite(input: InviteDraftInput): string {
   return [
     `Hi ${input.creatorFirstName} — ${input.brandName} would like ${input.deliverable} from you${due}.`,
     ``,
-    `Fee: ${formatNaira(input.feeKobo)}, already held in escrow. You are paid within 7 days of your post going live.`,
+    `The budget is already held in escrow, so the money is real before you start. You tell us your rate — we are not going to tell you what your work is worth.`,
     ``,
     input.inviteUrl,
     ``,
