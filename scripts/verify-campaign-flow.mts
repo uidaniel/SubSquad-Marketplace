@@ -27,6 +27,7 @@ import { toBrief } from "../src/lib/data/brief";
 import { formatNaira } from "../src/lib/money";
 import { checkSendAllowed, chooseChannel } from "../src/lib/messaging/policy";
 import { integrations } from "../src/lib/env";
+import { acceptRate, counterRate, pendingRates } from "../src/lib/deals/rates";
 
 const db = requireServiceClient();
 const stamp = Date.now().toString(36);
@@ -100,6 +101,77 @@ async function main() {
     "2. Brief reads back in the domain shape",
     brief.keyMessages.length === 2 && brief.mustAvoid.length === 1,
     `keyMessages=${brief.keyMessages.length}, mustAvoid=${brief.mustAvoid.length}, platforms=${brief.platforms.join(",")}`,
+  );
+
+  /* ---- 2b. creators that belong to this run only -------------------------- */
+
+  // Seeded rather than borrowed from the index.
+  //
+  // Reachability depends on `last_contacted_at`, which the real send path
+  // stamps. Asserting against shared creators meant this run could pass or fail
+  // on what somebody did in the app five minutes earlier — and a test that
+  // depends on that is not evidence of anything.
+  // Plausible, not placeholder. The model is asked to judge fit against a
+  // brief; feeding it `__verify_abc_0__` with no category tags tests nothing
+  // about the product and everything about how it copes with nonsense.
+  const CAST = [
+    { name: "Ada Obi", tags: ["comedy", "skits"], city: "Lagos" },
+    { name: "Bode Ajayi", tags: ["tech", "reviews"], city: "Abuja" },
+    { name: "Chika Nwosu", tags: ["lifestyle", "comedy"], city: "Enugu" },
+  ];
+
+  const creatorIds: string[] = [];
+  for (const [i, person] of CAST.entries()) {
+    const { data: c } = await db
+      .from("creators")
+      .insert({
+        display_name: person.name,
+        handle: `verify_${stamp}_${i}`,
+        primary_platform: "tiktok",
+        email: `verify+${stamp}.${i}@example.invalid`,
+        status: "indexed",
+        do_not_contact: false,
+        last_contacted_at: null,
+      })
+      .select("id")
+      .single();
+    if (!c) continue;
+    creatorIds.push(c.id);
+    cleanup.push({ table: "creators", id: c.id });
+
+    await db.from("creator_profiles").insert({
+      creator_id: c.id,
+      platform: "tiktok",
+      followers: 80_000 + i * 10_000,
+      following: 500,
+      posts_count: 300,
+      avg_views: 60_000,
+      avg_likes: 5_000,
+      avg_comments: 120,
+      engagement_rate: 0.08,
+      category_tags: person.tags,
+      languages: ["English"],
+      location_city: person.city,
+      sample_posts: [
+        {
+          url: "https://example.invalid/p",
+          caption: `Splitting the bill with my friends again and somebody always forgets to pay me back.`,
+          views: 60000,
+          likes: 5000,
+        },
+      ],
+    });
+    await db.from("creator_scores").insert({
+      creator_id: c.id,
+      fraud_score: 95,
+      reasons: [],
+    });
+  }
+
+  check(
+    "2b. Three contactable creators seeded for this run",
+    creatorIds.length === 3,
+    `${creatorIds.length} created, never contacted, on tiktok`,
   );
 
   /* ---- 3. deliverables --------------------------------------------------- */
@@ -293,7 +365,7 @@ async function main() {
   const { data: contactable } = await db
     .from("creators")
     .select("handle, email, phone, whatsapp_opt_in, do_not_contact, last_contacted_at")
-    .eq("primary_platform", "tiktok");
+    .in("id", creatorIds);
 
   const reachable = (contactable ?? []).filter((c) => {
     const contact = {
@@ -352,7 +424,7 @@ async function main() {
 
   const { data: madeDeals } = await db
     .from("deals")
-    .select("id, status")
+    .select("id, status, creator_id")
     .eq("campaign_id", campaign!.id);
 
   const dealIds = (madeDeals ?? []).map((d) => d.id);
@@ -366,14 +438,111 @@ async function main() {
   const allEmail = (madeDrafts ?? []).every((m) => m.channel === "email");
   const noneSent = (madeDrafts ?? []).every((m) => m.sent_at === null);
 
-  check(
-    "12. Approving a stuck shortlist creates deals and unsent email drafts",
-    (madeDeals ?? []).length > 0 &&
-      (madeDrafts ?? []).length > 0 &&
-      allEmail &&
-      noneSent,
-    `${(madeDeals ?? []).length} deals, ${(madeDrafts ?? []).length} drafts, all on email: ${allEmail}, none sent: ${noneSent}`,
+  // The invariant is "everybody shortlisted ends up with a deal", not "this
+  // call created N of them". Step 8 deliberately gives one creator a deal
+  // beforehand, so on a short shortlist there is correctly nobody left to
+  // invite — and asserting a raw count failed the product for being right.
+  // Scoped to this run's creators. The pool is global, so the model may
+  // legitimately shortlist a real creator who is inside the 7-day cooldown —
+  // approveShortlist then skips them, correctly, and counting that as a failure
+  // made the test fail the product for obeying its own rule.
+  const { data: shortlistRows } = await db
+    .from("shortlist_items")
+    .select("creator_id")
+    .eq("campaign_id", campaign!.id)
+    .in("creator_id", creatorIds)
+    .neq("status", "removed");
+
+  const withDeals = new Set((madeDeals ?? []).map((d) => d.creator_id as string));
+  const everyoneInvited = (shortlistRows ?? []).every((r) =>
+    withDeals.has(r.creator_id as string),
   );
+
+  check(
+    "12. Approving a stuck shortlist leaves every creator with a deal, nothing sent",
+    (shortlistRows ?? []).length > 0 && everyoneInvited && allEmail && noneSent,
+    `${(shortlistRows ?? []).length} shortlisted, ${(madeDeals ?? []).length} deals, ${(madeDrafts ?? []).length} drafts, all on email: ${allEmail}, none sent: ${noneSent}`,
+  );
+
+
+  /* ---- 13. the rate negotiation closes ------------------------------------ */
+
+  // A creator could always name a rate; nobody could answer it. The deal sat in
+  // "negotiating" forever because the amount lived in a chat message and there
+  // was no brand-side action and no screen showing it.
+  const { data: firstDeal } = await db
+    .from("deals")
+    .select("id, fee_kobo")
+    .eq("campaign_id", campaign!.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!firstDeal) {
+    check("13. Rate negotiation", false, "no deal to negotiate on");
+  } else {
+    const asking = Number(firstDeal.fee_kobo) + 100_000; // ask for N1,000 more
+
+    await db
+      .from("deals")
+      .update({
+        status: "negotiating",
+        proposed_fee_kobo: asking,
+        rate_proposed_at: new Date().toISOString(),
+        rate_note: "This is my rate for a single TikTok video.",
+      })
+      .eq("id", firstDeal.id);
+
+    const queue = await pendingRates(org!.id);
+    const mine = queue.find((r) => r.dealId === firstDeal.id);
+
+    check(
+      "13. A named rate reaches the agency queue with its affordability worked out",
+      Boolean(mine) && mine!.proposedKobo === asking,
+      mine
+        ? `@${mine.creatorHandle} asking ${formatNaira(mine.proposedKobo)} against ${formatNaira(mine.offeredKobo)} offered, affordable: ${mine.affordable}`
+        : "the deal never appeared in the queue",
+    );
+
+    const accepted = await acceptRate(firstDeal.id, org!.id);
+    const { data: settled } = await db
+      .from("deals")
+      .select("fee_kobo, status, proposed_fee_kobo, rate_agreed_at")
+      .eq("id", firstDeal.id)
+      .maybeSingle();
+
+    check(
+      "14. Accepting a rate fixes the fee, clears the ask and marks it agreed",
+      accepted.ok &&
+        Number(settled?.fee_kobo) === asking &&
+        settled?.status === "accepted" &&
+        settled?.proposed_fee_kobo === null &&
+        Boolean(settled?.rate_agreed_at),
+      accepted.ok
+        ? `fee is now ${formatNaira(Number(settled?.fee_kobo))}, status ${settled?.status}`
+        : accepted.message,
+    );
+
+    // A rate escrow cannot cover must be refused before the work is done, not
+    // discovered at payout when there is no good answer.
+    const { data: second } = await db
+      .from("deals")
+      .select("id")
+      .eq("campaign_id", campaign!.id)
+      .neq("id", firstDeal.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (second) {
+      const absurd = await counterRate(second.id, 50_000_000_00, "Testing the ceiling.");
+      check(
+        "15. A rate beyond escrow is refused with the shortfall named",
+        !absurd.ok && /short|escrow/i.test(absurd.message),
+        absurd.message,
+      );
+    } else {
+      check("15. Escrow ceiling", true, "only one deal on this campaign — skipped");
+    }
+  }
 
 
   console.log(

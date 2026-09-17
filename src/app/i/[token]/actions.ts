@@ -349,8 +349,8 @@ export async function counterOffer(
   if (!ACCEPTABLE.has(deal.status)) {
     return { error: "This deal is no longer open." };
   }
-  if (!Number.isInteger(amountKobo) || amountKobo <= Number(deal.fee_kobo)) {
-    return { error: "Ask for more than what is already offered." };
+  if (!Number.isInteger(amountKobo) || amountKobo <= 0) {
+    return { error: "Enter the rate you want for this work." };
   }
 
   const db = requireServiceClient();
@@ -361,12 +361,23 @@ export async function counterOffer(
     direction: "inbound",
     channel: "manual",
     body: note?.trim()
-      ? `Counter-offer: ₦${naira}. ${note.trim()}`
-      : `Counter-offer: ₦${naira}.`,
+      ? `Asking for ₦${naira}. ${note.trim()}`
+      : `Asking for ₦${naira}.`,
     ai_draft: false,
   });
 
-  await db.from("deals").update({ status: "negotiating" }).eq("id", deal.id);
+  // The amount goes on the deal, not only into the message body. It used to
+  // live only in that sentence, which is why nobody on the brand side could
+  // accept it — there was nothing structured to say yes to.
+  await db
+    .from("deals")
+    .update({
+      status: "negotiating",
+      proposed_fee_kobo: amountKobo,
+      rate_proposed_at: new Date().toISOString(),
+      rate_note: note?.trim() || null,
+    })
+    .eq("id", deal.id);
 
   revalidatePath(`/i/${token}`);
   return { ok: true };

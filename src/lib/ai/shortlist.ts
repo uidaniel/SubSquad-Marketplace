@@ -140,12 +140,33 @@ export async function generateShortlist(
   );
 
   const poolIds = new Set(pool.map((c) => c.creatorId));
-  const valid = result.data.candidates.filter((c) => poolIds.has(c.creatorId));
-  const hallucinated = result.data.candidates.length - valid.length;
+  const modelPicks = result.data.candidates.filter((c) => poolIds.has(c.creatorId));
+  const hallucinated = result.data.candidates.length - modelPicks.length;
+
+  // The model is allowed to return fewer than asked — "return fewer if fewer
+  // genuinely fit" is in the prompt on purpose. But returning *none* left an
+  // agency staring at a dead end on the one screen the whole campaign waits on,
+  // and it happened on roughly half of runs against a small index.
+  //
+  // So a run that yields nothing usable falls back to the pool ordered by fraud
+  // score, and says so in each row. An ordering somebody can argue with beats an
+  // error they can only retry.
+  const valid =
+    modelPicks.length > 0
+      ? modelPicks
+      : pool.slice(0, Math.min(wanted, pool.length)).map((c) => ({
+          creatorId: c.creatorId,
+          fitScore: c.fraudScore ?? 50,
+          reasoning:
+            "Ranked by fraud score alone — the model did not return a usable shortlist for this brief, so this is ordered by account health rather than fit. Read each profile before approving.",
+          estimatedFeeKobo:
+            Number(campaign.rate_band_max_kobo) || Number(campaign.rate_band_min_kobo) || 0,
+          flags: ["not_ai_ranked"],
+        }));
 
   if (valid.length === 0) {
     throw new ShortlistError(
-      "The model did not return any creators from the pool. Try again — if it keeps happening, the brief may be too narrow.",
+      "There is nobody left to suggest. Everyone in the index who works on these platforms has already been invited to this campaign.",
     );
   }
 

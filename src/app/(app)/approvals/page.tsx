@@ -20,6 +20,8 @@ import {
   TR,
 } from "@/components/ui/table";
 import { getCurrentUser, getNeedsAction } from "@/lib/data/queries";
+import { RateDecisions } from "./rate-decisions";
+import { getPendingRates } from "../rate-actions";
 
 export const metadata = { title: "Approvals" };
 
@@ -39,7 +41,11 @@ const TONE_LABEL = {
  * twenty campaigns should be able to work top to bottom and stop when it is empty.
  */
 export default async function ApprovalsPage() {
-  const [user, actions] = await Promise.all([getCurrentUser(), getNeedsAction()]);
+  const [user, actions, rates] = await Promise.all([
+    getCurrentUser(),
+    getNeedsAction(),
+    getPendingRates(),
+  ]);
 
   const grouped = {
     warn: actions.filter((a) => a.tone === "warn"),
@@ -60,12 +66,16 @@ export default async function ApprovalsPage() {
           title="Approvals"
           subtitle={
             actions.length
-              ? `${actions.length} decision${actions.length === 1 ? "" : "s"} waiting on you. Everything else is running on its own.`
-              : "Nothing is waiting on you."
+              ? `${actions.length + rates.length} decision${actions.length + rates.length === 1 ? "" : "s"} waiting on you. Everything else is running on its own.`
+              : rates.length
+                ? `${rates.length} creator${rates.length === 1 ? " is" : "s are"} waiting on a rate.`
+                : "Nothing is waiting on you."
           }
         />
 
-        {actions.length === 0 ? (
+        <RateDecisions rates={rates} />
+
+        {actions.length === 0 && rates.length === 0 ? (
           <Panel>
             <PanelBody className="py-16 text-center">
               <CheckCheck className="mx-auto size-6 text-ok" />
