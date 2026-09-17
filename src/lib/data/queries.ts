@@ -1,6 +1,7 @@
 import "server-only";
 
 import { env } from "@/lib/env";
+import type { CampaignSlot } from "@/lib/domain";
 import * as demo from "./demo-queries";
 import * as live from "./supabase-queries";
 
@@ -54,3 +55,18 @@ export async function getCampaignEscrow(campaignId: string) {
 
 /** "Now" — fixed in demo mode so screenshots are stable, real otherwise. */
 export const NOW = env.demoMode ? demo.NOW : new Date();
+
+/**
+ * The deliverables a campaign is asking for.
+ *
+ * Several screens need the real slot count — the funding total, the shortlist
+ * target, the campaign header. Each was computing it its own way or, in the
+ * shortlist's case, using a number typed into the page.
+ */
+export async function getCampaignSlots(campaignId: string): Promise<CampaignSlot[]> {
+  if (env.demoMode) {
+    const { DEMO_SLOTS } = await import("@/lib/demo/data");
+    return DEMO_SLOTS.filter((s) => s.campaignId === campaignId);
+  }
+  return live.getCampaignSlots(campaignId);
+}

@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "db:push": "supabase db push",
     "db:verify": "tsx scripts/verify-ledger.mts",
+    "verify:flow": "tsx --env-file=.env.local --tsconfig scripts/tsconfig.json scripts/verify-campaign-flow.mts",
     "seed": "tsx scripts/seed.mts",
     "e2e": "playwright test"
   },

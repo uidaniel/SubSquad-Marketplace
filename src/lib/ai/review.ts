@@ -12,7 +12,7 @@ import {
 import { sendTransactional } from "@/lib/messaging/send";
 import { revisionEmail } from "@/lib/messaging/email-templates";
 import { creatorUrl } from "@/lib/domains";
-import type { Brief } from "@/lib/domain";
+import { toBrief } from "@/lib/data/brief";
 
 /**
  * Reviewing a draft against its brief.
@@ -72,7 +72,7 @@ export async function reviewDraft(draftId: string): Promise<ReviewResult> {
 
   const campaign = one(deal.campaigns);
   const creator = one(deal.creators);
-  const brief = (campaign?.brief ?? {}) as Brief;
+  const brief = toBrief(campaign?.brief);
 
   const attemptNumber = Number(draft.version);
   const frames = Array.isArray(draft.frame_descriptions)

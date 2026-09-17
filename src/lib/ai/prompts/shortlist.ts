@@ -124,6 +124,14 @@ ${posts || "    (no sample posts on file)"}`;
     })
     .join("\n\n");
 
+  // Callers pass a brief through `toBrief`, which guarantees these are arrays.
+  // Belt and braces anyway: this is a prompt, and a missing key message should
+  // degrade the ranking, never take down the button that starts it.
+  const bullets = (items: string[] | undefined) =>
+    items?.length
+      ? items.map((m) => `- ${m}`).join("\n  ")
+      : "- (nothing specified)";
+
   return `THE BRIEF
 
 Campaign: ${args.campaignName}
@@ -133,10 +141,10 @@ Objective: ${args.brief.objective}
 Category: ${args.brief.arconCategory}
 
 Every video must get across:
-  ${args.brief.keyMessages.map((m: string) => `- ${m}`).join("\n  ") || "- (nothing specified)"}
+  ${bullets(args.brief.keyMessages)}
 
 It must never:
-  ${args.brief.mustAvoid.map((m: string) => `- ${m}`).join("\n  ") || "- (nothing specified)"}
+  ${bullets(args.brief.mustAvoid)}
 
 Audience: ${cities}, speaking ${languages}
 Deliverables:

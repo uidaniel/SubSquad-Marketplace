@@ -11,8 +11,8 @@ import {
   type ShortlistCandidateInput,
 } from "./prompts/shortlist";
 import { SHORTLIST_ELIGIBILITY_THRESHOLD } from "@/lib/fraud/rules";
-import type { Brief } from "@/lib/domain";
 import type { Kobo } from "@/lib/money";
+import { toBrief } from "@/lib/data/brief";
 
 /**
  * Generating a shortlist.
@@ -99,7 +99,7 @@ export async function generateShortlist(
     );
   }
 
-  const brief = campaign.brief as Brief;
+  const brief = toBrief(campaign.brief);
 
   const result = await callModel(
     {
@@ -282,4 +282,46 @@ async function buildPool(
     .sort((a, b) => (b.fraudScore ?? 0) - (a.fraudScore ?? 0));
 
   return rows.slice(0, POOL_SIZE);
+}
+
+/**
+ * How many creators this campaign could draw from, before the model runs.
+ *
+ * The shortlist screen used to state "412 screened" — a number written into the
+ * page source, true of nothing. Telling an agency you searched 412 creators when
+ * the index holds eight is the kind of detail that, once noticed, makes them
+ * doubt the fraud scores too.
+ *
+ * Returns the real figure, or zero with the reason it is zero.
+ */
+export async function eligiblePool(campaignId: string): Promise<{
+  eligible: number;
+  platforms: string[];
+  hasSlots: boolean;
+}> {
+  const db = requireServiceClient();
+
+  const { data: campaign } = await db
+    .from("campaigns")
+    .select("id, campaign_slots(deliverable_type)")
+    .eq("id", campaignId)
+    .maybeSingle();
+
+  const slots = (campaign?.campaign_slots ?? []) as { deliverable_type: string }[];
+  if (slots.length === 0) {
+    return { eligible: 0, platforms: [], hasSlots: false };
+  }
+
+  const platforms = [
+    ...new Set(slots.map((s) => s.deliverable_type.split("_")[0])),
+  ].map((p) => (p === "ig" ? "instagram" : p === "yt" ? "youtube" : p));
+
+  const { count } = await db
+    .from("creators")
+    .select("id", { count: "exact", head: true })
+    .in("primary_platform", platforms)
+    .neq("status", "suspended")
+    .eq("do_not_contact", false);
+
+  return { eligible: count ?? 0, platforms, hasSlots: true };
 }
