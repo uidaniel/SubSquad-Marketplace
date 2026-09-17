@@ -43,6 +43,31 @@ export async function GET() {
     problems.push(
       "NEXT_PUBLIC_APP_URL is unset, so invite and payment links will be built against localhost.",
     );
+  } else {
+    // A value that is set but not a valid absolute URL is worse than an unset
+    // one: `lib/env.ts` validates it and throws at module load, which takes
+    // down every page that imports it while leaving middleware-only routes
+    // working — a failure that looks intermittent and nothing like its cause.
+    try {
+      new URL(process.env.NEXT_PUBLIC_APP_URL!);
+    } catch {
+      problems.push(
+        `NEXT_PUBLIC_APP_URL is not a valid absolute URL ("${process.env.NEXT_PUBLIC_APP_URL}"). It needs the scheme, e.g. https://subsquad.netlify.app`,
+      );
+    }
+  }
+
+  // Whether the parsed environment actually loads. This is the check that
+  // matters: everything above can look right while one malformed value stops
+  // the module that reads them from importing at all.
+  let envLoads = true;
+  let envError: string | null = null;
+  try {
+    await import("@/lib/env");
+  } catch (error) {
+    envLoads = false;
+    envError = (error as Error).message;
+    problems.push(`The environment failed to load: ${envError}`);
   }
 
   const demoMode =
@@ -64,6 +89,7 @@ export async function GET() {
         whatsapp: set("WHATSAPP_ACCESS_TOKEN") && set("WHATSAPP_PHONE_NUMBER_ID"),
         deepgram: set("DEEPGRAM_API_KEY"),
       },
+      envLoads,
       problems,
     },
     // 503 when misconfigured, so an uptime check catches it rather than
