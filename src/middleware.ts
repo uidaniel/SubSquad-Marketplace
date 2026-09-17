@@ -98,9 +98,25 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // A cookie that cannot be parsed or refreshed is a signed-out user, not a
+  // server error. Supabase throws here when a token is malformed or its signing
+  // key has rotated, and letting that propagate takes down the sign-in page —
+  // which is the one page somebody in that state needs to reach.
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = "";
+    const cleared = NextResponse.redirect(url);
+    // Clear them rather than leave the loop to repeat on the next request.
+    for (const cookie of request.cookies.getAll()) {
+      if (cookie.name.startsWith("sb-")) cleared.cookies.delete(cookie.name);
+    }
+    return cleared;
+  }
 
   const isPublic = PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(prefix),

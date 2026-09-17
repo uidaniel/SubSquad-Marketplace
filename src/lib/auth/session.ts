@@ -28,13 +28,30 @@ export interface Session {
   member: OrgMember;
 }
 
+/**
+ * The signed-in user, or null.
+ *
+ * Supabase throws when a cookie is malformed or its signing key has rotated.
+ * That is a signed-out user, not a server error — and treating it as one takes
+ * down every page including the sign-in form, which is the only page somebody
+ * in that state can act on.
+ */
+async function currentUser(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
+  try {
+    const { data } = await supabase.auth.getUser();
+    return data.user;
+  } catch {
+    return null;
+  }
+}
+
 export const getSession = cache(async (): Promise<Session | null> => {
   if (env.demoMode) return null;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await currentUser(supabase);
   if (!user) return null;
 
   // Read through the user's own client so RLS decides what they can see. A
@@ -98,9 +115,7 @@ export async function requireSession(): Promise<Session> {
   const session = await getSession();
   if (!session) {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await currentUser(supabase);
     redirect(user ? "/signup/org" : "/login");
   }
   return session;
@@ -118,9 +133,7 @@ export const getSessionCreator = cache(async () => {
   if (env.demoMode) return null;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await currentUser(supabase);
   if (!user) return null;
 
   const { data } = await supabase
