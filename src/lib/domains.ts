@@ -17,6 +17,14 @@
 
 export const CREATOR_SUBDOMAIN = "creator";
 
+/**
+ * Paths that belong to the creator surface wherever they are reached from.
+ *
+ * Invite and guest-payment links are opened by people with no account, usually
+ * from WhatsApp, so they must not be trapped behind the org app's sign-in.
+ */
+export const SHARED_PUBLIC_PREFIXES = ["/i/", "/d/", "/payments/"];
+
 /** The apex the subdomains hang off, e.g. "subsquad.ng". Unset while previewing. */
 export function rootDomain(): string | null {
   return process.env.NEXT_PUBLIC_ROOT_DOMAIN?.trim() || null;
@@ -51,7 +59,15 @@ export function creatorUrl(path = "/"): string {
   const domain = rootDomain();
   const clean = path.startsWith("/") ? path : `/${path}`;
 
+  // Invite and payment links keep their own paths on both surfaces. They are
+  // routes at the app root — `src/app/i/[token]` — and middleware deliberately
+  // exempts them from the `/creator` rewrite, so prefixing them here produced
+  // `/creator/i/<token>`: a 404 at the end of every invite email, on the single
+  // most important link in the product.
+  const isShared = SHARED_PUBLIC_PREFIXES.some((p) => clean.startsWith(p));
+
   if (!domain) {
+    if (isShared) return `${base}${clean}`;
     return `${base}${clean === "/" ? "/creator" : `/creator${clean}`}`;
   }
 
@@ -64,11 +80,3 @@ export function orgUrl(path = "/"): string {
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
-
-/**
- * Paths that belong to the creator surface wherever they are reached from.
- *
- * Invite and guest-payment links are opened by people with no account, usually
- * from WhatsApp, so they must not be trapped behind the org app's sign-in.
- */
-export const SHARED_PUBLIC_PREFIXES = ["/i/", "/d/", "/payments/"];
