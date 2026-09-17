@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
-import { Check, FileText, Lock, ShieldCheck } from "lucide-react";
+import { Check, FileText, ShieldCheck } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { requireServiceClient } from "@/lib/supabase/service";
 import { env } from "@/lib/env";
 import { applyBps, formatNaira } from "@/lib/money";
 import { formatCount, formatDate, formatPercent, formatRelative } from "@/lib/utils";
+import { PayButtons } from "./pay-buttons";
 
 export const metadata = { title: "A deal for you" };
 
@@ -156,18 +156,13 @@ export default async function GuestDealPage({
       {outstanding > 0 ? (
         <div className="fixed inset-x-0 bottom-0 border-t border-line bg-ground/95 px-4 py-3 backdrop-blur-md">
           <div className="mx-auto w-full max-w-[560px]">
-            <Button variant="brand" size="lg" block>
-              <Lock /> Pay {formatNaira(outstanding)} into escrow
-            </Button>
-            {paidKobo === 0 && (
-              <Button variant="outline" block className="mt-2">
-                Pay half now — {formatNaira(half)}
-              </Button>
-            )}
-            <p className="mt-2 text-center text-[11.5px] text-ink-3">
-              Card, bank transfer or USSD via Paystack.
-              {env.DRY_RUN ? " Test mode — no card is charged." : ""}
-            </p>
+            <PayButtons
+              token={token}
+              outstandingKobo={outstanding}
+              halfKobo={half}
+              showHalf={paidKobo === 0}
+              dryRun={env.DRY_RUN}
+            />
           </div>
         </div>
       ) : (

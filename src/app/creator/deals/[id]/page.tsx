@@ -5,17 +5,16 @@ import {
   ArrowLeft,
   Check,
   Lock,
-  Upload,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { DealStatusBadge } from "@/components/app/status";
 import { getCreatorDeal, getCurrentCreator } from "@/lib/data/creator-queries";
 import { NOW } from "@/lib/data/queries";
 import { formatNaira } from "@/lib/money";
 import { cn, formatDate, formatRelative } from "@/lib/utils";
 import { NoCreatorSession } from "@/app/creator/no-session";
+import { DraftUploader } from "./draft-uploader";
 
 export const metadata = { title: "Deal" };
 
@@ -69,9 +68,9 @@ export default async function CreatorDealPage({
           <p className="mt-2 whitespace-pre-line text-[13.5px] leading-relaxed text-ink-2">
             {review.creatorFeedback}
           </p>
-          <Button variant="brand" block className="mt-4">
-            <Upload /> Upload a new version
-          </Button>
+          <div className="mt-4">
+            <DraftUploader dealId={deal.id} buttonLabel="Upload a new version" />
+          </div>
         </section>
       )}
 
@@ -82,9 +81,9 @@ export default async function CreatorDealPage({
             Upload your draft and we will check it against the brief before the brand
             sees it — so you get one clear list of fixes, not five rounds of notes.
           </p>
-          <Button variant="brand" block className="mt-4">
-            <Upload /> Upload your draft
-          </Button>
+          <div className="mt-4">
+            <DraftUploader dealId={deal.id} buttonLabel="Upload your draft" />
+          </div>
         </section>
       )}
 

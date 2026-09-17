@@ -22,6 +22,7 @@ const PUBLIC_PREFIXES = [
   "/auth",
   "/i/", // creator invite links, opened from WhatsApp
   "/d/", // guest brand payment links
+  "/join/", // team invitations, opened before the person has an account
   "/payments/", // the post-payment landing page
   "/api/webhooks",
   // Reachable signed-out on purpose: the misconfiguration it reports is usually

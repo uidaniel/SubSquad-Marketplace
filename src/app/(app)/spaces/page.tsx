@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
 import { Topbar } from "@/components/app/topbar";
 import { Page, PageHead } from "@/components/app/page-head";
 import { CampaignStatusBadge } from "@/components/app/status";
 import { Avatar } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import { Panel, PanelBody, PanelFooter, PanelHeader, PanelTitle } from "@/components/ui/panel";
 import {
   getCampaignSummaries,
@@ -13,6 +11,7 @@ import {
 } from "@/lib/data/queries";
 import { formatNaira } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { AddClient } from "./add-client";
 
 export const metadata = { title: "Clients" };
 
@@ -39,9 +38,7 @@ export default async function SpacesPage() {
           title="Clients"
           subtitle={`${wallets.length} client spaces. Each one has its own wallet, its own campaigns, and its own view — clients never see each other, and never see your margin.`}
           actions={
-            <Button variant="brand">
-              <Plus /> Add a client
-            </Button>
+            <AddClient />
           }
         />
 

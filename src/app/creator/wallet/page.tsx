@@ -1,6 +1,5 @@
-import { Banknote, Clock, Lock, ShieldCheck } from "lucide-react";
+import { Clock, Lock, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   getCreatorDeals,
   getCreatorMoney,
@@ -10,15 +9,18 @@ import { NOW } from "@/lib/data/queries";
 import { formatNaira } from "@/lib/money";
 import { formatRelative } from "@/lib/utils";
 import { NoCreatorSession } from "@/app/creator/no-session";
+import { WithdrawButton } from "./withdraw-button";
+import { withdrawalState } from "./withdraw-actions";
 
 export const metadata = { title: "Your money" };
 
 export default async function CreatorWalletPage() {
   const creator = await getCurrentCreator();
   if (!creator) return <NoCreatorSession what="your money" />;
-  const [money, deals] = await Promise.all([
+  const [money, deals, withdrawal] = await Promise.all([
     getCreatorMoney(creator.id),
     getCreatorDeals(creator.id),
+    withdrawalState(),
   ]);
 
   const paid = deals.filter((d) => d.deal.status === "paid");
@@ -37,9 +39,12 @@ export default async function CreatorWalletPage() {
         <p className="mt-1 text-[36px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
           {formatNaira(money.availableKobo)}
         </p>
-        <Button variant="brand" block className="mt-4" disabled={money.availableKobo === 0}>
-          <Banknote /> Withdraw to {creator.payoutBankCode ? "GTBank ••••6789" : "your bank"}
-        </Button>
+        <WithdrawButton
+          availableKobo={withdrawal.availableKobo}
+          canWithdraw={withdrawal.canWithdraw}
+          reason={withdrawal.reason}
+          bankLabel={withdrawal.bankLabel}
+        />
         <p className="mt-2.5 text-center text-[12px] text-ink-3">
           Payouts land within 24 hours on a Nigerian bank account.
         </p>

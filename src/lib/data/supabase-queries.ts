@@ -23,6 +23,7 @@ import type {
 import { fundingRequiredFor } from "@/lib/ledger/transactions";
 import type { Kobo } from "@/lib/money";
 import { toBrief } from "./brief";
+import { one } from "./relations";
 
 /**
  * The live read path.
@@ -742,4 +743,120 @@ export async function getCampaignSlots(campaignId: string): Promise<CampaignSlot
     count: Number(s.count),
     feeKobo: Number(s.fee_kobo),
   }));
+}
+
+/**
+ * Everything an agency should see about one creator before hiring them.
+ *
+ * The shortlist gave a paragraph of AI reasoning and nothing else — no way to
+ * check the claim, no track record, no work to look at. An agency deciding
+ * whether to put a client's ₦200,000 on somebody needs the numbers behind the
+ * recommendation, not a summary of it.
+ *
+ * Deal history is scoped by RLS to this org's own deals, so one agency never
+ * learns who a creator works for elsewhere.
+ */
+export async function getCreatorDetail(creatorId: string) {
+  const client = await db();
+
+  const [{ data: row }, { data: profile }, { data: score }, { data: deals }] =
+    await Promise.all([
+      client.from("creators").select("*").eq("id", creatorId).maybeSingle(),
+      client
+        .from("creator_profiles")
+        .select("*")
+        .eq("creator_id", creatorId)
+        .maybeSingle(),
+      client
+        .from("creator_scores")
+        .select("*")
+        .eq("creator_id", creatorId)
+        .maybeSingle(),
+      client
+        .from("deals")
+        .select("*, campaigns(id, name, end_brand_name)")
+        .eq("creator_id", creatorId)
+        .order("created_at", { ascending: false }),
+    ]);
+
+  if (!row) return null;
+
+  const history = (deals ?? []).map((d) => {
+    const campaign = one(d.campaigns) as
+      | { id: string; name: string; end_brand_name: string }
+      | undefined;
+    return {
+      id: d.id as string,
+      status: d.status as DealStatus,
+      feeKobo: Number(d.fee_kobo),
+      deadline: d.deadline as string | null,
+      publishedAt: d.published_at as string | null,
+      publishedUrl: d.published_url as string | null,
+      campaignId: campaign?.id ?? null,
+      campaignName: campaign?.name ?? "Direct deal",
+      brandName: campaign?.end_brand_name ?? null,
+    };
+  });
+
+  // The record that matters when hiring: did they deliver, and on time.
+  const finished = history.filter((d) =>
+    ["published", "paid"].includes(d.status),
+  );
+  const missed = history.filter((d) => d.status === "cancelled");
+  const onTime = finished.filter(
+    (d) => !d.deadline || !d.publishedAt || d.publishedAt <= d.deadline,
+  );
+
+  return {
+    creator: toCreator(row),
+    profile: profile ? toProfile(profile) : null,
+    score: score ? toScore(score) : null,
+    history,
+    record: {
+      completed: finished.length,
+      missed: missed.length,
+      onTime: onTime.length,
+      earnedKobo: finished.reduce((s, d) => s + d.feeKobo, 0),
+    },
+  };
+}
+
+/** Everyone on the account, plus invitations that have not been accepted. */
+export async function getTeam() {
+  const org = await currentOrgRow();
+  const client = await db();
+
+  const [{ data: members }, { data: invites }] = await Promise.all([
+    client
+      .from("org_members")
+      .select("id, role, created_at, users:user_id(email, raw_user_meta_data)")
+      .eq("org_id", org.id)
+      .order("created_at"),
+    client
+      .from("org_invites")
+      .select("id, email, role, expires_at, created_at")
+      .eq("org_id", org.id)
+      .is("accepted_at", null)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  return {
+    members: (members ?? []).map((m) => {
+      const user = one(m.users) as
+        | { email?: string; raw_user_meta_data?: { full_name?: string } }
+        | undefined;
+      return {
+        id: m.id as string,
+        role: m.role as string,
+        email: user?.email ?? "",
+        name: user?.raw_user_meta_data?.full_name ?? user?.email ?? "Teammate",
+      };
+    }),
+    invites: (invites ?? []).map((i) => ({
+      id: i.id as string,
+      email: i.email as string,
+      role: i.role as string,
+      expiresAt: i.expires_at as string,
+    })),
+  };
 }

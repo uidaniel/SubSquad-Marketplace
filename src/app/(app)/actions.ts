@@ -3,12 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { requireServiceClient } from "@/lib/supabase/service";
 import { accountFor, balanceOf, InsufficientFunds, post } from "@/lib/ledger/post";
-import { buildDeposit, buildLock, fundingRequiredFor } from "@/lib/ledger/transactions";
+import {
+  buildDeposit,
+  buildLock,
+  buildRefund,
+  fundingRequiredFor,
+} from "@/lib/ledger/transactions";
 import { releaseDeal } from "@/lib/deals/release";
 import { checkSendAllowed } from "@/lib/messaging/policy";
 import { getCurrentOrg, getCurrentUser } from "@/lib/data/queries";
 import { formatNaira, parseNairaInput } from "@/lib/money";
 import { creatorUrl } from "@/lib/domains";
+import { env } from "@/lib/env";
 import { formatDate } from "@/lib/utils";
 import { one } from "@/lib/data/relations";
 
@@ -368,9 +374,28 @@ export async function approveShortlist(
    ========================================================================== */
 
 /** Approves a drafted message and sends it, honouring DRY_RUN and the caps. */
-export async function approveMessage(messageId: string): Promise<ActionResult> {
+export async function approveMessage(
+  messageId: string,
+  /**
+   * The text as the approver left it.
+   *
+   * Editing before sending is the point of the queue — an AI draft that cannot
+   * be corrected is a draft you have to discard and rewrite elsewhere. When
+   * given, this is saved before sending, so what went out and what is on the
+   * record are the same words.
+   */
+  editedBody?: string,
+): Promise<ActionResult> {
   const db = requireServiceClient();
   const user = await getCurrentUser();
+
+  if (editedBody?.trim()) {
+    await db
+      .from("deal_messages")
+      .update({ body: editedBody.trim() })
+      .eq("id", messageId)
+      .is("sent_at", null);
+  }
 
   const { data: message } = await db
     .from("deal_messages")
@@ -796,4 +821,475 @@ export async function runShortlist(
   } catch (error) {
     return { ok: false, message: (error as Error).message };
   }
+}
+
+/**
+ * Throwing away an AI draft that should not be sent.
+ *
+ * Deleted rather than kept as a rejected row: an unsent draft is not a fact
+ * about the creator, it is a suggestion nobody accepted, and leaving it in the
+ * thread makes the history harder to read for no gain. A sent message is never
+ * touched by this.
+ */
+export async function discardMessage(messageId: string): Promise<ActionResult> {
+  const db = requireServiceClient();
+
+  const { data: message } = await db
+    .from("deal_messages")
+    .select("id, deal_id, sent_at, ai_draft, deals(campaign_id)")
+    .eq("id", messageId)
+    .single();
+
+  if (!message) return { ok: false, message: "That message is no longer here." };
+  if (message.sent_at) {
+    return {
+      ok: false,
+      message: "That message has already been sent, so it cannot be discarded.",
+    };
+  }
+
+  await db.from("deal_messages").delete().eq("id", messageId).is("sent_at", null);
+
+  const campaignId = one(message.deals)?.campaign_id as string | undefined;
+  if (campaignId) revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/outreach");
+
+  return { ok: true, message: "Discarded. Nothing was sent." };
+}
+
+/* ==========================================================================
+   Cancelling
+   ========================================================================== */
+
+/** Deal states that mean a creator has committed and is owed a decision. */
+const COMMITTED_DEAL_STATES = [
+  "accepted",
+  "contract_signed",
+  "draft_submitted",
+  "revision_requested",
+  "approved",
+  "published",
+  "paid",
+  "disputed",
+];
+
+/**
+ * What cancelling this campaign would do, without doing it.
+ *
+ * The screen needs to state the consequence before the button is pressed —
+ * how much comes back and who gets told — and refusing at the point of the
+ * click is far too late when the answer is "you cannot, three creators have
+ * already signed".
+ */
+export async function previewCancelCampaign(campaignId: string): Promise<{
+  canCancel: boolean;
+  refundKobo: number;
+  invitedCount: number;
+  committedCount: number;
+  reason: string | null;
+}> {
+  const db = requireServiceClient();
+
+  const { data: campaign } = await db
+    .from("campaigns")
+    .select("id, org_id, space_id, status")
+    .eq("id", campaignId)
+    .maybeSingle();
+
+  if (!campaign) {
+    return {
+      canCancel: false,
+      refundKobo: 0,
+      invitedCount: 0,
+      committedCount: 0,
+      reason: "That campaign no longer exists.",
+    };
+  }
+
+  const { data: deals } = await db
+    .from("deals")
+    .select("id, status")
+    .eq("campaign_id", campaignId);
+
+  const committed = (deals ?? []).filter((d) =>
+    COMMITTED_DEAL_STATES.includes(d.status as string),
+  );
+  const invited = (deals ?? []).filter((d) => d.status === "invited");
+
+  const escrow = await accountFor("campaign_escrow", {
+    orgId: campaign.org_id,
+    spaceId: campaign.space_id,
+    campaignId: campaign.id,
+  });
+  const refundKobo = await balanceOf(escrow);
+
+  if (campaign.status === "cancelled") {
+    return {
+      canCancel: false,
+      refundKobo,
+      invitedCount: invited.length,
+      committedCount: committed.length,
+      reason: "This campaign is already cancelled.",
+    };
+  }
+
+  // A creator who has signed has arranged their week around this. Cancelling
+  // out from under them is a dispute, not a refund, and it goes to a person.
+  if (committed.length > 0) {
+    return {
+      canCancel: false,
+      refundKobo,
+      invitedCount: invited.length,
+      committedCount: committed.length,
+      reason: `${committed.length} creator${committed.length === 1 ? " has" : "s have"} already accepted this campaign. Cancel their individual deals first, or contact support — money owed to a creator who has started work is not ours to take back.`,
+    };
+  }
+
+  return {
+    canCancel: true,
+    refundKobo,
+    invitedCount: invited.length,
+    committedCount: 0,
+    reason: null,
+  };
+}
+
+/**
+ * Cancels a campaign and returns the escrow to the client's wallet.
+ *
+ * Escrowed money is the client's throughout — it is held, not taken — so a
+ * campaign that never started must be able to give it back. Without this,
+ * funding was a one-way door, which is precisely the thing an agency fears
+ * about putting a client's budget into somebody else's platform.
+ *
+ * Only campaigns nobody has committed to. The check is repeated here rather
+ * than trusted from the preview, because the two calls are seconds apart and a
+ * creator can accept in between.
+ */
+export async function cancelCampaign(
+  campaignId: string,
+  reason: string,
+): Promise<ActionResult> {
+  if (!reason.trim()) {
+    return {
+      ok: false,
+      message: "Say why this is being cancelled — it goes on the record and the invited creators are told.",
+    };
+  }
+
+  const db = requireServiceClient();
+  const user = await getCurrentUser();
+
+  const preview = await previewCancelCampaign(campaignId);
+  if (!preview.canCancel) {
+    return { ok: false, message: preview.reason ?? "This campaign cannot be cancelled." };
+  }
+
+  const { data: campaign } = await db
+    .from("campaigns")
+    .select("id, name, org_id, space_id")
+    .eq("id", campaignId)
+    .single();
+  if (!campaign) return { ok: false, message: "That campaign no longer exists." };
+
+  try {
+    if (preview.refundKobo > 0) {
+      const escrow = await accountFor("campaign_escrow", {
+        orgId: campaign.org_id,
+        spaceId: campaign.space_id,
+        campaignId: campaign.id,
+      });
+      const wallet = await accountFor("space_wallet", {
+        orgId: campaign.org_id,
+        spaceId: campaign.space_id,
+      });
+
+      await post(
+        buildRefund({
+          escrowAccountId: escrow,
+          destinationAccountId: wallet,
+          amountKobo: preview.refundKobo,
+          memo: `Cancelled ${campaign.name} — escrow returned`,
+        }),
+        { createdBy: user.userId },
+      );
+    }
+
+    // Invited creators are told, and their deals closed. An invite left open on
+    // a cancelled campaign is how somebody does work nobody will pay for.
+    await db
+      .from("deals")
+      .update({ status: "cancelled" })
+      .eq("campaign_id", campaignId)
+      .eq("status", "invited");
+
+    // Unsent drafts for those invites are pointless now.
+    const { data: openDeals } = await db
+      .from("deals")
+      .select("id")
+      .eq("campaign_id", campaignId);
+    const dealIds = (openDeals ?? []).map((d) => d.id);
+    if (dealIds.length) {
+      await db
+        .from("deal_messages")
+        .delete()
+        .in("deal_id", dealIds)
+        .is("sent_at", null);
+    }
+
+    await db
+      .from("shortlist_items")
+      .delete()
+      .eq("campaign_id", campaignId)
+      .eq("status", "proposed");
+
+    await db
+      .from("campaigns")
+      .update({ status: "cancelled" })
+      .eq("id", campaignId);
+
+    revalidatePath(`/campaigns/${campaignId}`);
+    revalidatePath("/campaigns");
+    revalidatePath("/wallet");
+    revalidatePath("/");
+
+    return {
+      ok: true,
+      message:
+        preview.refundKobo > 0
+          ? `Cancelled. ${formatNaira(preview.refundKobo)} is back in the client's wallet and available to spend.`
+          : "Cancelled. There was nothing in escrow to return.",
+    };
+  } catch (error) {
+    return { ok: false, message: (error as Error).message };
+  }
+}
+
+/* ==========================================================================
+   Clients
+   ========================================================================== */
+
+/**
+ * Adds a client space.
+ *
+ * A space is the unit of separation in this product: its own wallet, its own
+ * campaigns, and a wall between one client's money and another's. An agency
+ * that cannot add their second client cannot use the platform at all, and the
+ * button to do it did nothing.
+ */
+export async function createSpace(
+  name: string,
+  category: string,
+): Promise<ActionResult> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return { ok: false, message: "Give the client a name." };
+  }
+
+  const org = await getCurrentOrg();
+  const db = requireServiceClient();
+
+  // Two spaces with the same name in one agency is a mistake waiting to become
+  // a payment to the wrong wallet.
+  const { data: clash } = await db
+    .from("spaces")
+    .select("id")
+    .eq("org_id", org.id)
+    .ilike("name", trimmed)
+    .maybeSingle();
+
+  if (clash) {
+    return { ok: false, message: `You already have a client called ${trimmed}.` };
+  }
+
+  const { error } = await db.from("spaces").insert({
+    org_id: org.id,
+    name: trimmed,
+    category: category.trim() || null,
+  });
+
+  if (error) {
+    return { ok: false, message: `Could not add that client: ${error.message}` };
+  }
+
+  revalidatePath("/spaces");
+  revalidatePath("/wallet");
+  revalidatePath("/campaigns/new");
+
+  return {
+    ok: true,
+    message: `${trimmed} added. They have their own wallet, starting empty.`,
+  };
+}
+
+/* ==========================================================================
+   Account settings
+   ========================================================================== */
+
+/**
+ * Saves the agency's own details.
+ *
+ * The registered name and CAC number are what appear on a creator's contract,
+ * so this is not cosmetic — a contract naming the wrong entity is harder to
+ * enforce. Only an owner or admin may change them.
+ */
+export async function updateOrgSettings(input: {
+  name: string;
+  cacNumber: string;
+  defaultMarginBps?: number;
+}): Promise<ActionResult> {
+  const [org, member] = await Promise.all([getCurrentOrg(), getCurrentUser()]);
+
+  if (member.role !== "owner" && member.role !== "admin") {
+    return {
+      ok: false,
+      message: "Only an owner or an admin can change the account details.",
+    };
+  }
+
+  const name = input.name.trim();
+  if (!name) return { ok: false, message: "The registered name cannot be empty." };
+
+  const patch: Record<string, unknown> = {
+    name,
+    cac_number: input.cacNumber.trim() || null,
+  };
+
+  if (input.defaultMarginBps !== undefined) {
+    if (
+      !Number.isInteger(input.defaultMarginBps) ||
+      input.defaultMarginBps < 0 ||
+      input.defaultMarginBps > 10_000
+    ) {
+      return { ok: false, message: "That margin is not a valid percentage." };
+    }
+    patch.default_margin_bps = input.defaultMarginBps;
+  }
+
+  const { error } = await requireServiceClient()
+    .from("orgs")
+    .update(patch)
+    .eq("id", org.id);
+
+  if (error) {
+    return { ok: false, message: `Could not save: ${error.message}` };
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/");
+
+  return { ok: true, message: "Saved." };
+}
+
+/* ==========================================================================
+   Team
+   ========================================================================== */
+
+/**
+ * Inviting a colleague into the agency account.
+ *
+ * Until this existed, the only way into an org was to create it — so the second
+ * person at an agency simply could not get in. The invite is a random token
+ * tied to one email address; accepting it while signed in as somebody else is
+ * refused, so a forwarded invite cannot add a stranger to the account.
+ *
+ * Re-inviting the same address replaces the outstanding invite rather than
+ * failing, because "I'll send it again" is what a person actually does when an
+ * email goes missing.
+ */
+export async function inviteTeammate(
+  email: string,
+  role: "admin" | "member",
+): Promise<ActionResult> {
+  const [org, member] = await Promise.all([getCurrentOrg(), getCurrentUser()]);
+
+  if (member.role !== "owner" && member.role !== "admin") {
+    return { ok: false, message: "Only an owner or an admin can invite people." };
+  }
+
+  const address = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+    return { ok: false, message: "That does not look like an email address." };
+  }
+
+  const db = requireServiceClient();
+
+  // Already on the team is not a failure worth an error message about tokens.
+  const { data: existing } = await db
+    .from("org_members")
+    .select("id, users:user_id(email)")
+    .eq("org_id", org.id);
+
+  const alreadyIn = (existing ?? []).some(
+    (m) => (one(m.users) as { email?: string } | undefined)?.email?.toLowerCase() === address,
+  );
+  if (alreadyIn) {
+    return { ok: false, message: `${address} is already on this account.` };
+  }
+
+  await db.from("org_invites").delete().eq("org_id", org.id).eq("email", address);
+
+  const { data: invite, error } = await db
+    .from("org_invites")
+    .insert({
+      org_id: org.id,
+      email: address,
+      role,
+      invited_by: member.userId,
+    })
+    .select("token")
+    .single();
+
+  if (error || !invite) {
+    return {
+      ok: false,
+      message: `Could not create that invitation: ${error?.message ?? "unknown error"}`,
+    };
+  }
+
+  const link = `${env.NEXT_PUBLIC_APP_URL}/join/${invite.token}`;
+
+  const { sendTransactional } = await import("@/lib/messaging/send");
+  const outcome = await sendTransactional({
+    channel: "email",
+    to: { email: address },
+    subject: `${member.name} invited you to ${org.name} on SubSquad`,
+    body: [
+      `${member.name} has invited you to join ${org.name} on SubSquad as ${role === "admin" ? "an admin" : "a member"}.`,
+      "",
+      `Accept here: ${link}`,
+      "",
+      "This link expires in seven days and works once.",
+      "",
+      "If you were not expecting this, ignore it — nothing happens until you accept.",
+    ].join("\n"),
+    label: `org invite to ${address}`,
+  });
+
+  revalidatePath("/settings");
+
+  return {
+    ok: true,
+    message: outcome.sent
+      ? `Invitation sent to ${address}. It expires in seven days.`
+      : `Invitation created for ${address}, but the email could not be sent. Share this link with them directly: ${link}`,
+  };
+}
+
+/** Withdrawing an invitation that has not been accepted. */
+export async function revokeInvite(inviteId: string): Promise<ActionResult> {
+  const [org, member] = await Promise.all([getCurrentOrg(), getCurrentUser()]);
+  if (member.role !== "owner" && member.role !== "admin") {
+    return { ok: false, message: "Only an owner or an admin can do that." };
+  }
+
+  await requireServiceClient()
+    .from("org_invites")
+    .delete()
+    .eq("id", inviteId)
+    .eq("org_id", org.id)
+    .is("accepted_at", null);
+
+  revalidatePath("/settings");
+  return { ok: true, message: "Invitation withdrawn." };
 }

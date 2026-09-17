@@ -21,9 +21,12 @@ import { runShortlist } from "../../../actions";
 export function GenerateShortlistButton({
   campaignId,
   regenerate,
+  block,
 }: {
   campaignId: string;
   regenerate?: boolean;
+  /** Full width, for the sidebar where it sits under the approve button. */
+  block?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = React.useState(false);
@@ -35,6 +38,7 @@ export function GenerateShortlistButton({
       <Button
         variant={regenerate ? "outline" : "brand"}
         size={regenerate ? "sm" : "lg"}
+        block={block}
         disabled={busy}
         onClick={async () => {
           setBusy(true);

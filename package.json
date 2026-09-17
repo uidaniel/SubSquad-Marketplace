@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit",
     "db:push": "supabase db push",
     "db:verify": "tsx scripts/verify-ledger.mts",
+    "audit:links": "node scripts/audit-links.mjs",
+    "audit:buttons": "node scripts/audit-dead-buttons.mjs",
     "verify:flow": "tsx --env-file=.env.local --tsconfig scripts/tsconfig.json scripts/verify-campaign-flow.mts",
     "seed": "tsx scripts/seed.mts",
     "e2e": "playwright test"

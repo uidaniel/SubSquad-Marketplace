@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Download, ExternalLink } from "lucide-react";
+import { Download } from "lucide-react";
 import { Topbar } from "@/components/app/topbar";
 import { Page, PageHead, StatStrip } from "@/components/app/page-head";
 import { CampaignStatusBadge } from "@/components/app/status";
@@ -62,8 +62,10 @@ export default async function ReportsPage() {
           title="Reports"
           subtitle="Everything below comes from the ledger, so it reconciles with the money that actually moved."
           actions={
-            <Button variant="outline">
-              <Download /> Export CSV
+            <Button variant="outline" asChild>
+              <a href="/api/export?kind=ledger">
+                <Download /> Export CSV
+              </a>
             </Button>
           }
         />
@@ -191,8 +193,10 @@ export default async function ReportsPage() {
               charged — and never your margin, your other clients, or what the
               creators were actually paid.
             </p>
-            <Button variant="outline" size="sm" className="mt-3">
-              <ExternalLink /> Preview a client report
+            <Button variant="outline" size="sm" className="mt-3" asChild>
+              <a href="/api/export?kind=campaigns">
+                <Download /> Export every campaign
+              </a>
             </Button>
           </div>
         </Panel>

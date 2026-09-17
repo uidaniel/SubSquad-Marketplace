@@ -370,3 +370,57 @@ export async function getTransactions(limit = 50) {
 }
 
 export const NOW = DEMO_NOW;
+
+/** The fixture mirror of the live creator profile. Same shape, same fields. */
+export async function getCreatorDetail(creatorId: string) {
+  const creator = DEMO_CREATORS.find((c) => c.id === creatorId);
+  if (!creator) return null;
+
+  const deals = DEMO_DEALS.filter((d) => d.creatorId === creatorId);
+  const history = deals.map((d) => {
+    const campaign = DEMO_CAMPAIGNS.find((c) => c.id === d.campaignId);
+    return {
+      id: d.id,
+      status: d.status,
+      feeKobo: d.feeKobo,
+      deadline: d.deadline ?? null,
+      publishedAt: d.publishedAt ?? null,
+      publishedUrl: d.publishedUrl ?? null,
+      campaignId: campaign?.id ?? null,
+      campaignName: campaign?.name ?? "Direct deal",
+      brandName: campaign?.endBrandName ?? null,
+    };
+  });
+
+  const finished = history.filter((d) => ["published", "paid"].includes(d.status));
+  const missed = history.filter((d) => d.status === "cancelled");
+  const onTime = finished.filter(
+    (d) => !d.deadline || !d.publishedAt || d.publishedAt <= d.deadline,
+  );
+
+  return {
+    creator,
+    profile: DEMO_PROFILES.find((p) => p.creatorId === creatorId) ?? null,
+    score: DEMO_SCORES.find((s) => s.creatorId === creatorId) ?? null,
+    history,
+    record: {
+      completed: finished.length,
+      missed: missed.length,
+      onTime: onTime.length,
+      earnedKobo: finished.reduce((s, d) => s + d.feeKobo, 0),
+    },
+  };
+}
+
+/** The fixture team: the demo members, and never any pending invitations. */
+export async function getTeam() {
+  return {
+    members: DEMO_MEMBERS.map((m) => ({
+      id: m.userId,
+      role: m.role as string,
+      email: m.email,
+      name: m.name,
+    })),
+    invites: [] as { id: string; email: string; role: string; expiresAt: string }[],
+  };
+}

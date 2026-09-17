@@ -84,7 +84,10 @@ export default async function CreatorsPage() {
                     return (
                       <TR key={creator.id} className={cn(excluded && "opacity-60")}>
                         <TD>
-                          <div className="flex items-center gap-3">
+                          <Link
+                            href={`/creators/${creator.id}`}
+                            className="flex items-center gap-3"
+                          >
                             <Avatar name={creator.displayName} />
                             <span className="min-w-0">
                               <CellMain>@{creator.handle}</CellMain>
@@ -92,7 +95,7 @@ export default async function CreatorsPage() {
                                 {creator.displayName} · {profile?.locationCity}
                               </CellSub>
                             </span>
-                          </div>
+                          </Link>
                         </TD>
                         <TD numeric className="hidden sm:table-cell">
                           {formatCount(profile?.followers ?? 0)}

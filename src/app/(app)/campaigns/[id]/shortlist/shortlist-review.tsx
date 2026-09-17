@@ -2,11 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Sparkles, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelBody, PanelHeader, PanelTitle } from "@/components/ui/panel";
 import { ScoreBadge } from "@/components/app/status";
+import { ActionButton } from "@/components/app/action-button";
+import { approveShortlist } from "../../../actions";
+import { GenerateShortlistButton } from "./generate-button";
 import type { Creator, CreatorProfile, CreatorScoreRecord, ShortlistItem } from "@/lib/domain";
 import { formatNaira } from "@/lib/money";
 import { cn, formatCount, formatPercent } from "@/lib/utils";
@@ -45,6 +49,7 @@ export function ShortlistReview({
   campaignId: string;
   slotsTarget: number;
 }) {
+  const router = useRouter();
   const [removed, setRemoved] = React.useState<Set<string>>(new Set());
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
 
@@ -104,7 +109,12 @@ export function ShortlistReview({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                      <span className="font-medium">@{row.creator.handle}</span>
+                      <Link
+                        href={`/creators/${row.creator.id}`}
+                        className="font-medium hover:underline"
+                      >
+                        @{row.creator.handle}
+                      </Link>
                       <span className="text-[12.5px] text-ink-3">
                         {row.profile?.platform === "tiktok" ? "TikTok" : "Instagram"} ·{" "}
                         {row.profile?.locationCity}
@@ -112,13 +122,40 @@ export function ShortlistReview({
                       {score && <ScoreBadge score={score.fraudScore} />}
                     </div>
 
-                    <p className="mt-0.5 text-[12.5px] text-ink-2 tabular-nums">
-                      {formatCount(row.profile?.followers ?? 0)} followers ·{" "}
-                      {formatPercent(row.profile?.engagementRate ?? 0)} engagement
-                      {row.profile?.categoryTags?.length
-                        ? ` · ${row.profile.categoryTags.slice(0, 2).join(", ")}`
-                        : ""}
-                    </p>
+                    {/* The numbers the recommendation was made from, not just
+                        the recommendation. Reach is what a brand is buying;
+                        followers alone say very little. */}
+                    <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 sm:grid-cols-4">
+                      <Stat
+                        label="Followers"
+                        value={formatCount(row.profile?.followers ?? 0)}
+                      />
+                      <Stat
+                        label="Avg views"
+                        value={formatCount(row.profile?.avgViews ?? 0)}
+                      />
+                      <Stat
+                        label="Engagement"
+                        value={formatPercent(row.profile?.engagementRate ?? 0)}
+                      />
+                      <Stat
+                        label="Reach"
+                        value={
+                          row.profile && row.profile.followers > 0
+                            ? formatPercent(
+                                row.profile.avgViews / row.profile.followers,
+                              )
+                            : "—"
+                        }
+                        hint="of followers who see a post"
+                      />
+                    </dl>
+
+                    {row.profile?.categoryTags?.length ? (
+                      <p className="mt-1.5 text-[12.5px] text-ink-3">
+                        {row.profile.categoryTags.slice(0, 4).join(" · ")}
+                      </p>
+                    ) : null}
 
                     {/* The reasoning is the product. It is never behind a toggle. */}
                     <p className="mt-2.5 flex gap-2 text-[13px] leading-relaxed text-ink-2">
@@ -227,19 +264,30 @@ export function ShortlistReview({
             </p>
           )}
         </PanelBody>
-        <div className="border-t border-line p-4">
-          <Button
+        <div className="space-y-2 border-t border-line p-4">
+          <ActionButton
             variant="brand"
             block
             disabled={overBudget || approved.length === 0}
-            // Wired to the server action in the outreach step (D4-T2).
-            formAction={`/campaigns/${campaignId}/shortlist/approve`}
+            action={() =>
+              approveShortlist(campaignId, [...removed])
+            }
+            onDone={(result) => {
+              // The page is a server component, so the new deals only appear
+              // after a refresh. Without this the screen still shows the
+              // shortlist it has just consumed.
+              if (result.ok) router.refresh();
+            }}
+            confirm={{
+              title: `Approve ${approved.length} creator${approved.length === 1 ? "" : "s"}?`,
+              body: `This commits ${formatNaira(committed)} from escrow and writes one invite per creator. Nothing is sent — each draft waits for you in Outreach.`,
+              confirmLabel: `Approve ${approved.length} and draft invites`,
+            }}
           >
             Approve {approved.length} and draft invites
-          </Button>
-          <Button variant="ghost" block className="mt-2">
-            Get more suggestions
-          </Button>
+          </ActionButton>
+
+          <GenerateShortlistButton campaignId={campaignId} regenerate block />
         </div>
       </Panel>
     </div>
@@ -273,6 +321,31 @@ function Row({
         {prefix}
         {value}
       </span>
+    </div>
+  );
+}
+
+/** One number from the profile, labelled so it needs no explanation. */
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <dt className="text-[11.5px] uppercase tracking-wide text-ink-3">
+        {label}
+      </dt>
+      <dd
+        className="text-[14px] font-medium tabular-nums"
+        title={hint}
+      >
+        {value}
+      </dd>
     </div>
   );
 }

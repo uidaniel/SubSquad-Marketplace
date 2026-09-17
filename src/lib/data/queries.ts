@@ -38,6 +38,7 @@ export const getDraftsForCampaign = (id: string) => impl.getDraftsForCampaign(id
 export const getPendingMessageDrafts = () => impl.getPendingMessageDrafts();
 export const getShortlist = (id: string) => impl.getShortlist(id);
 export const getCreators = () => impl.getCreators();
+export const getCreatorDetail = (creatorId: string) => impl.getCreatorDetail(creatorId);
 
 /**
  * The escrow balance for a campaign.
@@ -70,3 +71,4 @@ export async function getCampaignSlots(campaignId: string): Promise<CampaignSlot
   }
   return live.getCampaignSlots(campaignId);
 }
+export const getTeam = () => impl.getTeam();

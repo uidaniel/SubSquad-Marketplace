@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import {
   AlertTriangle,
   Check,
+  Download,
   ExternalLink,
   FileText,
   Sparkles,
@@ -12,6 +13,9 @@ import { Topbar } from "@/components/app/topbar";
 import { Page, PageHead, StatStrip } from "@/components/app/page-head";
 import { Tabs } from "@/components/app/tabs";
 import { CampaignStatusBadge, DealStatusBadge, ScoreBadge } from "@/components/app/status";
+import { DraftDecision } from "./draft-decision";
+import { MessageDecision } from "./message-decision";
+import { CancelCampaign } from "./cancel-campaign";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -106,6 +110,10 @@ export default async function CampaignPage({
           actions={
             <>
               <CampaignStatusBadge status={campaign.status} />
+              {campaign.status !== "cancelled" &&
+                campaign.status !== "completed" && (
+                  <CancelCampaign campaignId={campaign.id} />
+                )}
               {summary.nextAction && (
                 <Button variant="brand" asChild>
                   <Link href={summary.nextAction.href}>
@@ -156,7 +164,9 @@ export default async function CampaignPage({
         {active === "creators" && <CreatorsTab deals={deals} />}
         {active === "content" && <ContentTab drafts={drafts} />}
         {active === "messages" && <MessagesTab messages={messages} />}
-        {active === "results" && <ResultsTab deals={published} />}
+        {active === "results" && (
+          <ResultsTab deals={published} campaignId={campaign.id} />
+        )}
         {active === "contract" && <ContractTab campaign={campaign} />}
       </Page>
     </>
@@ -342,14 +352,7 @@ function ContentTab({
                   </p>
                 )}
 
-                {needsYou && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button variant="default">
-                      <Check /> Approve
-                    </Button>
-                    <Button variant="outline">Request a revision</Button>
-                  </div>
-                )}
+                {needsYou && <DraftDecision draftId={draft.id} />}
               </div>
             </PanelBody>
           </Panel>
@@ -410,17 +413,7 @@ function MessagesTab({
               </p>
 
               {pending ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="default">
-                    <Check /> Approve and send
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="ghost">
-                    Discard
-                  </Button>
-                </div>
+                <MessageDecision messageId={message.id} body={message.body} />
               ) : message.approvedBy ? (
                 <p className="mt-2 text-[12px] text-ink-3">
                   Approved by {message.approvedBy}
@@ -441,15 +434,23 @@ function MessagesTab({
    Results
    ========================================================================== */
 
-function ResultsTab({ deals }: { deals: DealSummary[] }) {
+function ResultsTab({
+  deals,
+  campaignId,
+}: {
+  deals: DealSummary[];
+  campaignId: string;
+}) {
   const total = deals.reduce((s, d) => s + d.deal.feeKobo, 0);
 
   return (
     <Panel>
       <PanelHeader
         action={
-          <Button variant="outline" size="sm">
-            Export report
+          <Button variant="outline" size="sm" asChild>
+            <a href={`/api/export?kind=campaign&id=${campaignId}`}>
+              <Download /> Export report
+            </a>
           </Button>
         }
       >

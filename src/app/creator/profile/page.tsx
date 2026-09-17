@@ -1,6 +1,5 @@
-import { BadgeCheck, Building2, ExternalLink, ShieldCheck } from "lucide-react";
+import { Building2, ExternalLink, ShieldCheck } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScoreBadge } from "@/components/app/status";
 import { getCreatorMoney, getCurrentCreator } from "@/lib/data/creator-queries";
@@ -8,13 +7,20 @@ import { DEMO_PROFILES, DEMO_SCORES } from "@/lib/demo/data";
 import { formatNaira } from "@/lib/money";
 import { formatCount, formatPercent } from "@/lib/utils";
 import { NoCreatorSession } from "@/app/creator/no-session";
+import { PayoutForm } from "./payout-form";
+import { COMMON_BANKS, listBanks } from "@/lib/payouts/banks";
 
 export const metadata = { title: "Your profile" };
 
 export default async function CreatorProfilePage() {
   const creator = await getCurrentCreator();
   if (!creator) return <NoCreatorSession what="your profile" />;
-  const [money] = await Promise.all([getCreatorMoney(creator.id)]);
+  const [money, banks] = await Promise.all([
+    getCreatorMoney(creator.id),
+    // Falls back to the common list when Paystack is unreachable, so the
+    // form still works rather than offering an empty dropdown.
+    listBanks().catch(() => COMMON_BANKS),
+  ]);
   const profile = DEMO_PROFILES.find((p) => p.creatorId === creator.id);
   const score = DEMO_SCORES.find((s) => s.creatorId === creator.id);
 
@@ -36,8 +42,14 @@ export default async function CreatorProfilePage() {
       <section className="mt-5 rounded-[var(--radius-lg)] border border-line bg-surface p-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-[14px] font-semibold">Your public record</h2>
-          <Button variant="ghost" size="sm">
-            View as a brand <ExternalLink />
+          <Button variant="ghost" size="sm" asChild>
+            <a
+              href={`/creators/${creator.id}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View as a brand <ExternalLink />
+            </a>
           </Button>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-[var(--radius-sm)] bg-line">
@@ -82,9 +94,16 @@ export default async function CreatorProfilePage() {
         <p className="mt-3 text-[12.5px] leading-relaxed text-ink-3">
           Think this is wrong? A person will review it — not the model that scored
           it.{" "}
-          <button className="font-medium text-brand-ink hover:underline">
+          <a
+            href={`mailto:support@subsquad.ng?subject=${encodeURIComponent(
+              `Score appeal — @${creator.handle}`,
+            )}&body=${encodeURIComponent(
+              "Tell us which flag you think is wrong, and why. A person reads this.",
+            )}`}
+            className="font-medium text-brand-ink hover:underline"
+          >
             Appeal your score
-          </button>
+          </a>
         </p>
       </section>
 
@@ -93,21 +112,15 @@ export default async function CreatorProfilePage() {
           <h2 className="text-[14px] font-semibold">Your account</h2>
         </div>
         <dl className="divide-y divide-line">
-          <Row
-            label="Payout account"
-            value={
-              creator.payoutVerified ? "GTBank ••••6789" : "Not set up"
-            }
-            badge={
-              creator.payoutVerified ? (
-                <Badge tone="ok">
-                  <BadgeCheck className="size-3" /> Verified
-                </Badge>
-              ) : (
-                <Badge tone="warn">Needed to get paid</Badge>
-              )
-            }
-          />
+          <li className="px-5 py-4">
+            <p className="mb-2.5 text-[12.5px] text-ink-2">Payout account</p>
+            <PayoutForm
+              banks={banks}
+              currentName={creator.payoutAccountName ?? null}
+              currentLast4={creator.payoutAccountNumber?.slice(-4) ?? null}
+              verified={Boolean(creator.payoutVerified)}
+            />
+          </li>
           <Row label="WhatsApp" value={creator.phone ?? "Not connected"} />
           <Row
             label={profile?.platform === "tiktok" ? "TikTok" : "Instagram"}

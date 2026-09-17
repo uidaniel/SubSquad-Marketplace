@@ -7,7 +7,6 @@ import {
   Banknote,
   Building2,
   Check,
-  ChevronDown,
   LayoutDashboard,
   MessageSquare,
   Receipt,
@@ -19,6 +18,7 @@ import { cn, initialsOf } from "@/lib/utils";
 import { formatNaira } from "@/lib/money";
 import { NAV_TOGGLE_EVENT } from "./mobile-nav-button";
 import { SignOutButton } from "./sign-out";
+import { OrgMenu } from "./org-menu";
 
 /**
  * The rail.
@@ -122,23 +122,11 @@ export function Sidebar({
         SubSquad
       </Link>
 
-      <button
-        type="button"
-        className="mb-4 flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] border border-white/10 px-2.5 py-2 text-left transition-colors hover:bg-white/5"
-      >
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-info text-[12px] font-semibold text-white lg:size-7 lg:text-[11px]">
-          {initialsOf(orgName)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium text-white">
-            {orgName}
-          </span>
-          <span className="block truncate text-[12.5px] text-chrome-ink/50 lg:text-[11.5px]">
-            {orgSubtitle}
-          </span>
-        </span>
-        <ChevronDown className="size-4 shrink-0 text-chrome-ink/50" />
-      </button>
+      <OrgMenu
+        orgName={orgName}
+        orgSubtitle={orgSubtitle}
+        initials={initialsOf(orgName)}
+      />
 
       <nav className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none]">
         {groups.map((group) => (
