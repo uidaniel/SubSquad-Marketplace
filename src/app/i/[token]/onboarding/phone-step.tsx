@@ -55,19 +55,25 @@ export function PhoneStep({ state }: { state: OnboardingState }) {
 
   return (
     <>
+      {/* Say where the code actually went.
+          This screen promised WhatsApp whatever happened, so on a deployment
+          running email-only it told people to check an app nothing had been
+          sent to — and then blamed their number when it failed. */}
       <h1 className="text-[22px] font-semibold tracking-[-0.02em]">
-        {codeSent ? "Enter the code" : "Confirm your WhatsApp number"}
+        {codeSent ? "Enter the code" : "Confirm your phone number"}
       </h1>
       <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
         {codeSent
-          ? `We sent a 6-digit code to ${formatNigerianPhone(sent.phone)} on WhatsApp.`
-          : "Everything after this — the brief, reminders, and the message when your money goes out — happens on WhatsApp. One code, once."}
+          ? sent.sentTo === "whatsapp"
+            ? `We sent a 6-digit code to ${formatNigerianPhone(sent.phone)} on WhatsApp.`
+            : "We sent a 6-digit code to your email — the same address this invite came to."
+          : "We need a number for reminders and for the message when your money goes out. One code, once."}
       </p>
 
       {!codeSent ? (
         <form action={sendAction} className="mt-6 space-y-4">
           <input type="hidden" name="token" value={state.token} />
-          <Field label="WhatsApp number" htmlFor="phone">
+          <Field label="Phone number" htmlFor="phone">
             <Input
               id="phone"
               name="phone"

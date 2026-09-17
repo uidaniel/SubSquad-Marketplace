@@ -143,7 +143,14 @@ export async function declineInvite(
    ========================================================================== */
 
 export type CodeResult =
-  | { ok: true; phone: string; dryRun: boolean; devCode?: string }
+  | {
+      ok: true;
+      phone: string;
+      /** Where the code went. The screen has to say, or they check the wrong app. */
+      sentTo: "whatsapp" | "email";
+      dryRun: boolean;
+      devCode?: string;
+    }
   | { error: string };
 
 export async function requestCode(
@@ -166,12 +173,20 @@ export async function requestCode(
   const deal = await dealByToken(token);
   if (!deal) return { error: "We could not find that invite." };
 
-  const sent = await sendVerificationCode(phone);
+  // Their email, so the code has somewhere to go when WhatsApp is not connected.
+  const { data: creator } = await requireServiceClient()
+    .from("creators")
+    .select("email")
+    .eq("id", deal.creator_id)
+    .maybeSingle();
+
+  const sent = await sendVerificationCode(phone, creator?.email ?? null);
   if (!sent.ok) return { error: sent.error };
 
   return {
     ok: true,
     phone,
+    sentTo: sent.sentTo,
     dryRun: sent.dryRun,
     devCode: sent.devCode,
   };

@@ -95,7 +95,7 @@ export function ContractStep({ state }: { state: OnboardingState }) {
           >
             subsquad.ng/legal
           </a>
-          , and a PDF of this deal is sent to your WhatsApp once you sign.
+          , and a PDF of this deal is emailed to you once you sign.
         </p>
       </div>
 

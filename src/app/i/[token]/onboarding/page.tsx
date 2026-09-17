@@ -59,7 +59,7 @@ export default async function OnboardingPage({
 
           <div className="mt-6 space-y-2 text-left">
             {[
-              "Your WhatsApp number is verified",
+              "Your phone number is verified",
               state.payoutAccountName
                 ? `Paying into ${state.payoutAccountName}`
                 : "Payout account saved",
@@ -83,7 +83,7 @@ export default async function OnboardingPage({
         </div>
 
         <p className="mt-5 text-center text-[12.5px] leading-relaxed text-ink-3">
-          Everything after this happens on WhatsApp — reminders, the draft, and
+          Everything after this reaches you by email — reminders, the draft, and
           the message telling you the money has gone out.
         </p>
       </main>

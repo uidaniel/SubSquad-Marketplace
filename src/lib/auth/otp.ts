@@ -5,6 +5,7 @@ import { requireServiceClient } from "@/lib/supabase/service";
 import { sendTransactional } from "@/lib/messaging/send";
 import { env } from "@/lib/env";
 import { formatNigerianPhone } from "@/lib/payouts/banks";
+import { integrations } from "@/lib/env";
 
 /**
  * One-time codes, over WhatsApp.
@@ -57,7 +58,13 @@ function generateCode(): string {
 }
 
 export type SendCodeResult =
-  | { ok: true; dryRun: boolean; devCode?: string }
+  | {
+      ok: true;
+      /** Which channel it actually went out on, so the screen can say so. */
+      sentTo: "whatsapp" | "email";
+      dryRun: boolean;
+      devCode?: string;
+    }
   | { ok: false; error: string };
 
 /**
@@ -69,6 +76,16 @@ export type SendCodeResult =
  */
 export async function sendVerificationCode(
   phone: string,
+  /**
+   * Where to send it when WhatsApp is not connected.
+   *
+   * The code was hardcoded to WhatsApp, so on a deployment running email-only
+   * outreach every creator hit "we could not reach that WhatsApp number" and
+   * onboarding stopped dead — at the step immediately after they had agreed a
+   * fee. The number still gets recorded; what changes is how we reach them to
+   * prove they hold it.
+   */
+  fallbackEmail?: string | null,
 ): Promise<SendCodeResult> {
   const db = requireServiceClient();
 
@@ -98,26 +115,42 @@ export async function sendVerificationCode(
     return { ok: false, error: "We could not send a code just now. Try again." };
   }
 
+  const viaWhatsApp = integrations.whatsapp;
+
+  if (!viaWhatsApp && !fallbackEmail) {
+    return {
+      ok: false,
+      error:
+        "We have no way to send you a code — no WhatsApp on our side, and no email on your record. Reply to the email that brought you here and a person will sort it.",
+    };
+  }
+
+  const body =
+    `${code} is your SubSquad code.\n\n` +
+    `It expires in 10 minutes. We will never ask you for this code — ` +
+    `if somebody does, it is a scam.`;
+
   const outcome = await sendTransactional({
-    channel: "whatsapp",
-    to: { phone },
+    channel: viaWhatsApp ? "whatsapp" : "email",
+    to: { phone, email: fallbackEmail ?? null },
+    subject: `${code} is your SubSquad code`,
     label: `verification code for ${formatNigerianPhone(phone)}`,
-    body:
-      `${code} is your SubSquad code.\n\n` +
-      `It expires in 10 minutes. We will never ask you for this code — ` +
-      `if somebody does, it is a scam.`,
+    body,
+    text: body,
   });
 
   if (!outcome.sent) {
     return {
       ok: false,
-      error:
-        "We could not reach that WhatsApp number. Check it and try again.",
+      error: viaWhatsApp
+        ? "We could not reach that WhatsApp number. Check it and try again."
+        : "We could not send the code to your email just now. Try again in a moment.",
     };
   }
 
   return {
     ok: true,
+    sentTo: viaWhatsApp ? "whatsapp" : "email",
     dryRun: Boolean(outcome.dryRun),
     devCode: outcome.dryRun ? code : undefined,
   };
