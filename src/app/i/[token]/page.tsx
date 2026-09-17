@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, Clock, Lock, X } from "lucide-react";
+import { ArrowRight, Check, Clock, Lock, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { InviteActions } from "./invite-actions";
 import { Authorisation } from "./authorisation";
 import { TabGroup } from "@/components/ui/tab-group";
@@ -71,6 +72,10 @@ export default async function InvitePage({
   const deliverable = `${deliverableCount} × ${
     READABLE_DELIVERABLE[deliverableType ?? ""] ?? "video"
   }`;
+
+  const dueDate = formatDate(deal.deadline, NOW);
+  const dueRelative = formatRelative(deal.deadline, NOW);
+  const dueLabel = dueRelative === dueDate ? dueDate : `${dueDate} · ${dueRelative}`;
 
   // Waiting on the brand is a state of its own. Without saying so the page just
   // looks like it ignored them.
@@ -150,10 +155,10 @@ export default async function InvitePage({
           <div data-tab="deal" className="space-y-4 pt-4">
           <Card title="What they are asking for">
             <Row label="Deliverable" value={deliverable} />
-            <Row
-              label="Due"
-              value={`${formatDate(deal.deadline, NOW)} · ${formatRelative(deal.deadline, NOW)}`}
-            />
+            {/* `formatRelative` falls back to the date beyond 30 days, which
+                rendered "30 Oct · 30 Oct". Only show it when it says something
+                the date does not. */}
+            <Row label="Due" value={dueLabel} />
             <Row label="Campaign" value={campaign?.name ?? "Direct deal"} />
             {brief?.audience.cities.length ? (
               <Row label="Audience" value={brief.audience.cities.join(", ")} />
@@ -179,8 +184,11 @@ export default async function InvitePage({
           {brief ? (
             <>
               <Card title="Every video must get across">
+                {/* Deduped: the campaign form writes the same lines into both
+                    key_messages and must_include, so concatenating them showed
+                    every requirement twice. */}
                 <Bullets
-                  items={[...brief.keyMessages, ...brief.mustInclude]}
+                  items={[...new Set([...brief.keyMessages, ...brief.mustInclude])]}
                   tone="good"
                   empty="Nothing specific — make it your way."
                 />
@@ -258,29 +266,67 @@ export default async function InvitePage({
       </div>
 
       <p className="mt-8 text-[12.5px] text-ink-3">
-        Sent to @{creator.handle}. If this is not for you, decline below — we will
-        not chase you.
+        Sent to @{creator.handle}.
+        {deal.status === "invited" && !awaitingBrand
+          ? " If this is not for you, decline below — we will not chase you."
+          : ""}
       </p>
 
-      {/* One decision, pinned where a thumb is. */}
-      {!settled && (
-        <div className="fixed inset-x-0 bottom-0 border-t border-line bg-ground/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] backdrop-blur-md">
-          <div className="mx-auto w-full max-w-[640px]">
-            {awaitingBrand ? (
-              <p className="py-2 text-center text-[13px] leading-relaxed text-ink-2">
-                You asked for {formatNaira(proposedFeeKobo!)}. {brandName} has been
-                told and will reply here — we will email you either way.
-              </p>
-            ) : (
-              <InviteActions
-                token={token}
-                feeKobo={deal.feeKobo}
-                rateBandMaxKobo={campaign?.rateBandMaxKobo ?? null}
-              />
-            )}
-          </div>
+      {/* Whatever is next, pinned where a thumb is.
+          Every state gets an answer. An agreed deal used to show nothing at all
+          — the page simply ended, and a creator who had just been told their
+          rate was accepted had no way to go on. */}
+      <div className="fixed inset-x-0 bottom-0 border-t border-line bg-ground/95 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] backdrop-blur-md">
+        <div className="mx-auto w-full max-w-[640px]">
+          {awaitingBrand ? (
+            <NextStep
+              note={`You asked for ${formatNaira(proposedFeeKobo!)}. ${brandName} has been told and will reply here — we will email you either way.`}
+            />
+          ) : deal.status === "invited" ? (
+            <InviteActions
+              token={token}
+              feeKobo={deal.feeKobo}
+              rateBandMaxKobo={campaign?.rateBandMaxKobo ?? null}
+            />
+          ) : deal.status === "accepted" ? (
+            <NextStep
+              href={`/i/${token}/onboarding`}
+              label="Sign the contract and start"
+              note="Two minutes: confirm your phone, add the bank account we pay into, and sign."
+            />
+          ) : deal.status === "contract_signed" ? (
+            <NextStep
+              href="/creator"
+              label="Upload your draft"
+              note="We check it against the brief before the brand sees it."
+            />
+          ) : deal.status === "revision_requested" ? (
+            <NextStep
+              href="/creator"
+              label="Upload a new version"
+              note="One clear set of fixes, not five rounds of notes."
+            />
+          ) : deal.status === "draft_submitted" ? (
+            <NextStep note="Your draft is with us. We check it against the brief, then the brand sees it." />
+          ) : deal.status === "approved" ? (
+            <NextStep
+              href="/creator"
+              label="Post it, then paste the link"
+              note="Payment releases once we can see it is live."
+            />
+          ) : deal.status === "published" ? (
+            <NextStep note="We are verifying your post. Payment releases automatically once it checks out." />
+          ) : deal.status === "paid" ? (
+            <NextStep
+              href="/creator/wallet"
+              label="See your money"
+              note={`${formatNaira(deal.feeKobo)} has been released to you.`}
+            />
+          ) : (
+            <NextStep note="This deal is closed. Nothing further is needed from you." />
+          )}
         </div>
-      )}
+      </div>
     </main>
   );
 }
@@ -410,5 +456,37 @@ function Bullets({
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The one thing to do next, or the reason there is nothing.
+ *
+ * A creator should never reach the bottom of this page and wonder what happens
+ * now. Where there is an action it is a button; where there is not, the page
+ * says who is holding it and what they are doing.
+ */
+function NextStep({
+  href,
+  label,
+  note,
+}: {
+  href?: string;
+  label?: string;
+  note: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {href && label && (
+        <Button variant="brand" size="lg" block asChild>
+          <Link href={href}>
+            {label} <ArrowRight />
+          </Link>
+        </Button>
+      )}
+      <p className="text-center text-[12.5px] leading-relaxed text-ink-2">
+        {note}
+      </p>
+    </div>
   );
 }

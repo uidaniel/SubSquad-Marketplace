@@ -46,7 +46,7 @@ export interface InviteView {
   /** Their company registration number, when we hold one. */
   agencyCac: string | null;
   agencyVerifiedAt: string | null;
-  /** What they would actually be making. */
+  /** What they would actually be making, and how many — always one per deal. */
   deliverableType: string | null;
   deliverableCount: number;
   /** A rate this creator has named and is waiting to hear back on. */

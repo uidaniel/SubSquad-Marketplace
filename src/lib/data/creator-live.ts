@@ -184,7 +184,14 @@ export async function getInviteByToken(token: string) {
     agencyCac: (orgRow?.cac_number as string) ?? null,
     agencyVerifiedAt: (orgRow?.verified_at as string) ?? null,
     deliverableType: slot?.deliverable_type ?? null,
-    deliverableCount: Number(slot?.count ?? 1),
+    /**
+     * What this one creator makes: one of them.
+     *
+     * `campaign_slots.count` is how many creators the campaign wants for that
+     * deliverable — the form calls the field "Creators". Reading it as a
+     * per-deal quantity told Chidera she owed ten TikTok videos for one fee.
+     */
+    deliverableCount: 1,
     /** The rate this creator has asked for and is waiting to hear back on. */
     proposedFeeKobo: data.proposed_fee_kobo ? Number(data.proposed_fee_kobo) : null,
     rateProposedAt: (data.rate_proposed_at as string | null) ?? null,
