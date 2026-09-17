@@ -307,11 +307,23 @@ export async function acceptContract(
   const deal = await dealByToken(token);
   if (!deal) return { error: "We could not find that invite." };
 
+  // Signed once, signed for good.
+  //
+  // There was no check at all, so opening the same link again let a creator
+  // sign the same deal a second time — overwriting the timestamp and the IP
+  // that make the first signature evidence, and generating a second PDF. A
+  // contract that can be re-signed is not a contract.
+  if (deal.contract_accepted_at) {
+    return {
+      error: "You have already signed this one. Nothing else is needed from you.",
+    };
+  }
+
   const creator = deal.creators as Record<string, unknown> | null;
   // The three facts have to be true before a contract means anything: we know
   // who they are, where to pay them, and that they agreed.
   if (!creator?.phone_verified_at) {
-    return { error: "Verify your WhatsApp number first." };
+    return { error: "Verify your phone number first." };
   }
   if (!creator?.payout_account_number) {
     return { error: "Add the account you want to be paid into first." };
@@ -418,6 +430,87 @@ export async function counterOffer(
       rate_note: note?.trim() || null,
     })
     .eq("id", deal.id);
+
+  revalidatePath(`/i/${token}`);
+  return { ok: true };
+}
+
+/* ==========================================================================
+   Step four — it is live
+   ========================================================================== */
+
+/**
+ * The creator says where they posted it.
+ *
+ * The last thing a creator does, and it had nowhere to happen: the deal page
+ * told them to "post it, then paste the link" and there was no form, no action
+ * and no route. Everything before this worked and the money could not move,
+ * because the one fact that releases it — a URL — could not be given to us.
+ *
+ * `auto_confirm_at` is the promise that makes this safe for the creator: if
+ * nobody verifies it within the window, it confirms on its own. A creator who
+ * has published should not be waiting on an agency's attention to be paid.
+ */
+export async function submitPublishedLink(
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const blocked = demoGuard();
+  if (blocked) return blocked;
+
+  const token = String(formData.get("token") ?? "");
+  const raw = String(formData.get("url") ?? "").trim();
+
+  if (!raw) return { error: "Paste the link to your post." };
+
+  let url: URL;
+  try {
+    url = new URL(raw.startsWith("http") ? raw : `https://${raw}`);
+  } catch {
+    return { error: "That does not look like a link. Copy it from the app and paste it here." };
+  }
+
+  // A link to the wrong place is the commonest mistake and the slowest to
+  // resolve, so it is caught here rather than by a person three days later.
+  const host = url.hostname.replace(/^www\./, "");
+  const known = ["tiktok.com", "instagram.com", "youtube.com", "youtu.be", "x.com", "twitter.com"];
+  if (!known.some((k) => host === k || host.endsWith(`.${k}`))) {
+    return {
+      error: `That link points at ${host}. Paste the link to the post itself, from TikTok, Instagram, YouTube or X.`,
+    };
+  }
+
+  const deal = await dealByToken(token);
+  if (!deal) return { error: "We could not find that invite." };
+
+  if (deal.status !== "approved" && deal.status !== "published") {
+    return {
+      error: "This deal is not ready to publish yet. We will tell you when it is.",
+    };
+  }
+
+  const db = requireServiceClient();
+  const now = new Date();
+
+  await db
+    .from("deals")
+    .update({
+      published_url: url.toString(),
+      published_at: now.toISOString(),
+      status: "published",
+      // Three days. Long enough for a person to look, short enough that silence
+      // does not cost the creator their money.
+      auto_confirm_at: new Date(now.getTime() + 3 * 86_400_000).toISOString(),
+    })
+    .eq("id", deal.id);
+
+  await db.from("deal_messages").insert({
+    deal_id: deal.id,
+    direction: "inbound",
+    channel: "manual",
+    body: `Published: ${url.toString()}`,
+    ai_draft: false,
+  });
 
   revalidatePath(`/i/${token}`);
   return { ok: true };

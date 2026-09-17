@@ -75,16 +75,20 @@ export default async function OnboardingPage({
             ))}
           </div>
 
+          {/* Back to the link they already hold, not into the creator app.
+              This sent them to /creator/deals/<id>, which needs an account most
+              creators do not have — so the last screen of onboarding handed
+              them "Open the link we sent you", when the link they had just used
+              was the one it meant. */}
           <Button asChild variant="brand" size="lg" block className="mt-6">
-            <Link href={`/creator/deals/${state.dealId}`}>
-              Open the deal
-            </Link>
+            <Link href={`/i/${token}`}>Back to your deal</Link>
           </Button>
         </div>
 
         <p className="mt-5 text-center text-[12.5px] leading-relaxed text-ink-3">
-          Everything after this reaches you by email — reminders, the draft, and
-          the message telling you the money has gone out.
+          Keep this link — it is how you get back to this deal, upload your draft
+          and check on your money. Reminders and the message telling you the
+          money has gone out reach you by email.
         </p>
       </main>
     );

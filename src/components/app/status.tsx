@@ -22,19 +22,41 @@ const CAMPAIGN_LABELS: Record<CampaignStatus, { label: string; tone: Tone }> = {
   cancelled: { label: "Cancelled", tone: "neutral" },
 };
 
+/**
+ * Colour says the phase; the label says the state.
+ *
+ * Eight statuses shared three tones, so Invited, Accepted and Contract signed
+ * were the same blue and a table of deals read as one undifferentiated block.
+ * There are only six tones and fourteen statuses, so colour cannot carry the
+ * whole distinction — but it can carry the thing a person scans for, which is
+ * whose move it is.
+ *
+ * So the tone follows the stage: warn when it is waiting on you, brand when it
+ * is waiting on the creator to do something specific, info while they are
+ * working, ok once it is live or paid, neutral when it is over. Two rows with
+ * the same colour always mean the same kind of thing.
+ */
 const DEAL_LABELS: Record<DealStatus, { label: string; tone: Tone }> = {
-  invited: { label: "Invited", tone: "info" },
-  negotiating: { label: "Negotiating", tone: "warn" },
-  accepted: { label: "Accepted", tone: "info" },
-  declined: { label: "Declined", tone: "neutral" },
+  // Waiting on the creator to answer.
+  invited: { label: "Invited", tone: "neutral" },
+  // Waiting on you.
+  negotiating: { label: "Wants a different rate", tone: "warn" },
+  // Agreed, waiting on them to sign.
+  accepted: { label: "Needs to sign", tone: "brand" },
   awaiting_funding: { label: "Awaiting funding", tone: "warn" },
   partially_funded: { label: "Part funded", tone: "warn" },
-  contract_signed: { label: "Contract signed", tone: "info" },
+  // Signed and working.
+  contract_signed: { label: "Filming", tone: "info" },
+  // Waiting on you.
   draft_submitted: { label: "Draft to review", tone: "warn" },
-  revision_requested: { label: "Revision sent", tone: "warn" },
-  approved: { label: "Approved", tone: "ok" },
-  published: { label: "Published", tone: "ok" },
+  // Waiting on them.
+  revision_requested: { label: "Fixing a revision", tone: "brand" },
+  approved: { label: "Ready to post", tone: "brand" },
+  // Done, or nearly.
+  published: { label: "Live", tone: "ok" },
   paid: { label: "Paid", tone: "ok" },
+  // Over.
+  declined: { label: "Declined", tone: "neutral" },
   cancelled: { label: "Cancelled", tone: "neutral" },
   disputed: { label: "In dispute", tone: "danger" },
 };

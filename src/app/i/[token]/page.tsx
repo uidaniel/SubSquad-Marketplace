@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InviteActions } from "./invite-actions";
 import { Authorisation } from "./authorisation";
+import { DraftUploader } from "@/app/creator/deals/[id]/draft-uploader";
+import { PublishForm } from "./publish-form";
 import { TabGroup } from "@/components/ui/tab-group";
 import { getInviteByToken } from "@/lib/data/creator-queries";
 import { formatNaira } from "@/lib/money";
@@ -295,32 +297,22 @@ export default async function InvitePage({
               note="Two minutes: confirm your phone, add the bank account we pay into, and sign."
             />
           ) : deal.status === "contract_signed" ? (
-            <NextStep
-              href="/creator"
-              label="Upload your draft"
-              note="We check it against the brief before the brand sees it."
-            />
+            /* The uploader itself, not a link to it.
+               This pointed at /creator, which needs an account most creators do
+               not have — the same dead end the end of onboarding had. The whole
+               job is reachable from the one link they were sent. */
+            <DraftUploader dealId={deal.id} buttonLabel="Upload your draft" />
           ) : deal.status === "revision_requested" ? (
-            <NextStep
-              href="/creator"
-              label="Upload a new version"
-              note="One clear set of fixes, not five rounds of notes."
-            />
+            <DraftUploader dealId={deal.id} buttonLabel="Upload a new version" />
           ) : deal.status === "draft_submitted" ? (
             <NextStep note="Your draft is with us. We check it against the brief, then the brand sees it." />
           ) : deal.status === "approved" ? (
-            <NextStep
-              href="/creator"
-              label="Post it, then paste the link"
-              note="Payment releases once we can see it is live."
-            />
+            <PublishForm />
           ) : deal.status === "published" ? (
             <NextStep note="We are verifying your post. Payment releases automatically once it checks out." />
           ) : deal.status === "paid" ? (
             <NextStep
-              href="/creator/wallet"
-              label="See your money"
-              note={`${formatNaira(deal.feeKobo)} has been released to you.`}
+              note={`${formatNaira(deal.feeKobo)} has been released to your bank.`}
             />
           ) : (
             <NextStep note="This deal is closed. Nothing further is needed from you." />

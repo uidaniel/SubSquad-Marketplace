@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { Topbar } from "@/components/app/topbar";
 import { Page, PageHead, StatStrip } from "@/components/app/page-head";
-import { Tabs } from "@/components/app/tabs";
+import { TabGroup } from "@/components/ui/tab-group";
 import { CampaignStatusBadge, DealStatusBadge, ScoreBadge } from "@/components/app/status";
 import { DraftDecision } from "./draft-decision";
 import { MessageDecision } from "./message-decision";
@@ -149,9 +149,12 @@ export default async function CampaignPage({
           ]}
         />
 
-        <Tabs
-          basePath={`/campaigns/${campaign.id}`}
-          active={active}
+        {/* Local switching. These were links to ?tab=, so every click was a
+            server round trip on a page that reads cookies and therefore cannot
+            be prefetched — while all five panels' data had already been
+            fetched and sent. */}
+        <TabGroup
+          initial={active}
           tabs={[
             { key: "creators", label: "Creators", count: deals.length },
             { key: "content", label: "Content", count: awaitingReview.length },
@@ -159,15 +162,23 @@ export default async function CampaignPage({
             { key: "results", label: "Results", count: published.length },
             { key: "contract", label: "Contract" },
           ]}
-        />
-
-        {active === "creators" && <CreatorsTab deals={deals} />}
-        {active === "content" && <ContentTab drafts={drafts} />}
-        {active === "messages" && <MessagesTab messages={messages} />}
-        {active === "results" && (
-          <ResultsTab deals={published} campaignId={campaign.id} />
-        )}
-        {active === "contract" && <ContractTab campaign={campaign} />}
+        >
+          <div data-tab="creators">
+            <CreatorsTab deals={deals} />
+          </div>
+          <div data-tab="content">
+            <ContentTab drafts={drafts} />
+          </div>
+          <div data-tab="messages">
+            <MessagesTab messages={messages} />
+          </div>
+          <div data-tab="results">
+            <ResultsTab deals={published} campaignId={campaign.id} />
+          </div>
+          <div data-tab="contract">
+            <ContractTab campaign={campaign} />
+          </div>
+        </TabGroup>
       </Page>
     </>
   );
