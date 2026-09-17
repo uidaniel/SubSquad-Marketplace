@@ -131,6 +131,29 @@ export async function submitDraft(args: {
     .update({ status: "draft_submitted" })
     .eq("id", args.dealId);
 
+  // Check it against the brief before the brand ever sees it. This is the whole
+  // promise — "bad drafts never reach you" — and it runs here rather than on a
+  // schedule because the creator is still on the page waiting to hear back.
+  //
+  // A failure here must not lose the draft: the upload succeeded and the work
+  // exists, so the deal simply stays visible to the org and a person reviews it
+  // the old way.
+  const { data: draft } = await db
+    .from("drafts")
+    .select("id")
+    .eq("deal_id", args.dealId)
+    .eq("version", args.version)
+    .maybeSingle();
+
+  if (draft) {
+    try {
+      const { reviewDraft } = await import("@/lib/ai/review");
+      await reviewDraft(draft.id);
+    } catch (error) {
+      console.error("[review] could not review draft", error);
+    }
+  }
+
   revalidatePath(`/creator/deals/${args.dealId}`);
   revalidatePath(`/deals/${args.dealId}`);
   return { ok: true };

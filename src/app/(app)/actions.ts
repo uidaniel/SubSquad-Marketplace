@@ -8,6 +8,9 @@ import { releaseDeal } from "@/lib/deals/release";
 import { checkSendAllowed } from "@/lib/messaging/policy";
 import { getCurrentOrg, getCurrentUser } from "@/lib/data/queries";
 import { formatNaira, parseNairaInput } from "@/lib/money";
+import { creatorUrl } from "@/lib/domains";
+import { formatDate } from "@/lib/utils";
+import { one } from "@/lib/data/relations";
 
 /**
  * Everything the org app can change.
@@ -189,7 +192,7 @@ export async function approveShortlist(
 
   const { data: items } = await db
     .from("shortlist_items")
-    .select("*, creators(id, display_name, phone, email, whatsapp_opt_in, do_not_contact, last_contacted_at)")
+    .select("*, creators(id, display_name, handle, phone, email, whatsapp_opt_in, do_not_contact, last_contacted_at)")
     .eq("campaign_id", campaignId)
     .eq("status", "proposed");
 
@@ -213,6 +216,15 @@ export async function approveShortlist(
   let created = 0;
   let skipped = 0;
 
+  // Drafts are written after the loop, all at once. Eighteen sequential model
+  // calls would exceed a serverless function's ceiling; in parallel they take
+  // about as long as the slowest one.
+  const pendingDrafts: {
+    dealId: string;
+    channel: "whatsapp" | "email";
+    input: import("@/lib/ai/invites").InviteDraftInput;
+  }[] = [];
+
   for (const item of approved) {
     const creator = item.creators as {
       id: string;
@@ -222,6 +234,7 @@ export async function approveShortlist(
       whatsapp_opt_in: boolean;
       do_not_contact: boolean;
       last_contacted_at: string | null;
+      handle: string | null;
     };
 
     // Checked before a deal is created, not before it is sent: a creator who
@@ -260,17 +273,21 @@ export async function approveShortlist(
 
     if (!deal) continue;
 
-    await db.from("deal_messages").insert({
-      deal_id: deal.id,
-      direction: "outbound",
+    // Drafted, not sent. It waits in the ops inbox until a person approves it,
+    // which is the rule for everything the platform says on an agency's behalf.
+    pendingDrafts.push({
+      dealId: deal.id,
       channel: creator.phone ? "whatsapp" : "email",
-      ai_draft: true,
-      body: inviteBody({
-        firstName: creator.display_name.split(" ")[0],
-        brand: campaign?.end_brand_name ?? "A brand",
+      input: {
+        creatorFirstName: creator.display_name.split(" ")[0],
+        creatorHandle: creator.handle ?? creator.display_name,
+        brandName: campaign?.end_brand_name ?? "A brand",
+        deliverable: "1 video",
         feeKobo: Number(item.estimated_fee_kobo),
-        token: deal.invite_token,
-      }),
+        deadline: (campaign?.deadline as string) ?? null,
+        inviteUrl: creatorUrl(`/i/${deal.invite_token}`),
+        channel: (creator.phone ? "whatsapp" : "email") as "whatsapp" | "email",
+      },
     });
 
     created += 1;
@@ -291,6 +308,22 @@ export async function approveShortlist(
   }
   await db.from("campaigns").update({ status: "outreach" }).eq("id", campaignId);
 
+  if (pendingDrafts.length > 0) {
+    const { draftInvite } = await import("@/lib/ai/invites");
+    const bodies = await Promise.all(
+      pendingDrafts.map((d) => draftInvite(d.input)),
+    );
+    await db.from("deal_messages").insert(
+      pendingDrafts.map((d, i) => ({
+        deal_id: d.dealId,
+        direction: "outbound",
+        channel: d.channel,
+        ai_draft: true,
+        body: bodies[i].body,
+      })),
+    );
+  }
+
   revalidatePath(`/campaigns/${campaignId}`);
   revalidatePath("/outreach");
   revalidatePath("/");
@@ -303,20 +336,6 @@ export async function approveShortlist(
         ? ` ${skipped} creator${skipped === 1 ? " was" : "s were"} skipped — opted out, or contacted in the last week.`
         : ""),
   };
-}
-
-function inviteBody(args: {
-  firstName: string;
-  brand: string;
-  feeKobo: number;
-  token: string;
-}): string {
-  return [
-    `Hi ${args.firstName} — ${args.brand} would like one video from you.`,
-    `Fee: ${formatNaira(args.feeKobo)}, already held in escrow.`,
-    `Details and accept: subsquad.ng/i/${args.token}`,
-    `Reply STOP to opt out.`,
-  ].join("\n");
 }
 
 /* ==========================================================================
@@ -344,12 +363,49 @@ export async function approveMessage(messageId: string): Promise<ActionResult> {
     .single();
   if (!creator) return { ok: false, message: "That creator is no longer here." };
 
+  // On email the approved text becomes the body of a designed template rather
+  // than going out as bare text. The reader has been scammed before, and a
+  // wall of unformatted text from an unknown sender is exactly what a scam
+  // looks like — the template puts the fee and the escrow badge up front.
+  let body = message.body as string;
+  let subject: string | undefined;
+  let text: string | undefined;
+
+  if (message.channel === "email") {
+    const { data: deal } = await db
+      .from("deals")
+      .select("fee_kobo, invite_token, deadline, campaigns(end_brand_name)")
+      .eq("id", message.deal_id)
+      .maybeSingle();
+
+    if (deal) {
+      const { inviteEmail } = await import("@/lib/messaging/email-templates");
+      const { creatorUrl } = await import("@/lib/domains");
+      const campaign = one(deal.campaigns);
+      const mail = inviteEmail({
+        creatorFirstName: String(creator.display_name ?? "there").split(" ")[0],
+        brandName: (campaign?.end_brand_name as string) ?? "A brand",
+        deliverable: "1 video",
+        feeKobo: Number(deal.fee_kobo),
+        deadline: deal.deadline ? formatDate(deal.deadline as string) : "the agreed date",
+        inviteUrl: creatorUrl(`/i/${deal.invite_token}`),
+      });
+      body = mail.html;
+      subject = mail.subject;
+      // The approved wording is what the creator reads in a plain-text client,
+      // so the person who approved it is still the author of what goes out.
+      text = message.body as string;
+    }
+  }
+
   const { sendMessage } = await import("@/lib/messaging/send");
   const outcome = await sendMessage(
     {
       dealId: message.deal_id,
       channel: message.channel,
-      body: message.body,
+      body,
+      subject,
+      text,
       to: { phone: creator.phone, email: creator.email },
       aiDraft: message.ai_draft,
       approvedBy: user.userId,

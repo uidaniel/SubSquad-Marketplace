@@ -40,6 +40,8 @@ export interface SendRequest {
   /** Present for email. */
   subject?: string;
   to: { phone?: string | null; email?: string | null };
+  /** The plain-text alternative when `body` is HTML from a template. */
+  text?: string;
   /** Set on a reply inside a live conversation, which is not rate-limited. */
   isReply?: boolean;
   /** The user id that approved this. Required for anything an AI drafted. */
@@ -89,6 +91,7 @@ export async function sendMessage(
             request.to.email!,
             request.subject ?? "A funded brand deal for you",
             request.body,
+            request.text,
           );
     return { sent: true, providerMessageId, dryRun: false };
   } catch (error) {
@@ -114,6 +117,8 @@ export async function sendTransactional(request: {
   to: { phone?: string | null; email?: string | null };
   body: string;
   subject?: string;
+  /** The plain-text alternative, when the body is HTML from a template. */
+  text?: string;
   /** Names the message in the dry-run log, so it is obvious what would go out. */
   label: string;
 }): Promise<SendOutcome> {
@@ -143,6 +148,7 @@ export async function sendTransactional(request: {
             request.to.email!,
             request.subject ?? "SubSquad",
             request.body,
+            request.text,
           );
     return { sent: true, providerMessageId, dryRun: false };
   } catch (error) {
@@ -189,7 +195,23 @@ async function sendWhatsApp(to: string, body: string): Promise<string> {
   return json.messages?.[0]?.id ?? "unknown";
 }
 
-async function sendEmail(to: string, subject: string, body: string): Promise<string> {
+/**
+ * Sends an email.
+ *
+ * `body` may be either HTML from a template or plain text written for WhatsApp,
+ * because the same call site serves both channels. Rather than make every
+ * caller say which, this looks: a body that opens with a doctype is HTML.
+ *
+ * Both parts are always sent. A text alternative is not politeness — a mail
+ * client that shows only the HTML part is fine, but spam filters read the text
+ * part, and an HTML-only message from a young domain scores worse for it.
+ */
+async function sendEmail(
+  to: string,
+  subject: string,
+  body: string,
+  text?: string,
+): Promise<string> {
   if (!integrations.resend) {
     throw new Error("Resend is not configured");
   }
@@ -197,13 +219,33 @@ async function sendEmail(to: string, subject: string, body: string): Promise<str
   const { Resend } = await import("resend");
   const resend = new Resend(env.RESEND_API_KEY);
 
+  const isHtml = body.trimStart().toLowerCase().startsWith("<!doctype");
+
   const { data, error } = await resend.emails.send({
     from: env.RESEND_FROM ?? "SubSquad <hello@subsquad.ng>",
     to,
     subject,
-    text: body,
+    ...(isHtml
+      ? { html: body, text: text ?? stripHtml(body) }
+      : { text: body }),
   });
 
   if (error) throw new Error(error.message);
   return data?.id ?? "unknown";
+}
+
+/**
+ * A readable plain-text version when a caller did not supply one.
+ *
+ * Crude on purpose: it exists so the text part is never empty, and every
+ * template ships a hand-written `text` that is used in preference to this.
+ */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
 }
