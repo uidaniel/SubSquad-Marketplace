@@ -234,10 +234,19 @@ async function handleTransferSuccess(event: PaystackEvent) {
   if (!code) throw new Error("transfer.success with no transfer_code");
 
   const db = requireServiceClient();
-  await db
+  const { data: payout } = await db
     .from("payouts")
     .update({ status: "success", raw: event as unknown as Record<string, unknown> })
-    .eq("paystack_transfer_code", code);
+    .eq("paystack_transfer_code", code)
+    .select("id")
+    .maybeSingle();
+
+  // Told now rather than on submission: a creator who reads "paid" and then
+  // watches nothing arrive trusts the next message less.
+  if (payout) {
+    const { notifyCreatorPaid } = await import("@/lib/messaging/notify");
+    await notifyCreatorPaid(payout.id as string);
+  }
 }
 
 /**

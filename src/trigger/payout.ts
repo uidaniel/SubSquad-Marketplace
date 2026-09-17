@@ -90,6 +90,10 @@ export const processPayout = task({
         .from("payouts")
         .update({ status: "success", paystack_transfer_code: `dryrun_${payout.id}` })
         .eq("id", payout.id);
+      // No webhook arrives in a dry run, so the notification is sent from here
+      // — and sendTransactional is itself in dry run, so nothing leaves.
+      const { notifyCreatorPaid } = await import("@/lib/messaging/notify");
+      await notifyCreatorPaid(payout.id);
       return { status: "paid" as const, dryRun: true };
     }
 
