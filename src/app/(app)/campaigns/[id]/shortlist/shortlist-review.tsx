@@ -6,7 +6,13 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Sparkles, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Panel, PanelBody, PanelHeader, PanelTitle } from "@/components/ui/panel";
+import {
+  Panel,
+  PanelBody,
+  PanelFooter,
+  PanelHeader,
+  PanelTitle,
+} from "@/components/ui/panel";
 import { ScoreBadge } from "@/components/app/status";
 import { ActionButton } from "@/components/app/action-button";
 import { approveShortlist } from "../../../actions";
@@ -201,8 +207,18 @@ export function ShortlistReview({
                   </div>
 
                   <div className="flex shrink-0 flex-col items-end gap-2">
-                    <span className="text-[15px] font-semibold tabular-nums">
-                      {formatNaira(row.item.estimatedFeeKobo)}
+                    {/* An offer, not their price.
+                        This was a bare figure, which read as "what this creator
+                        charges". It is the model's estimate inside your rate
+                        band — the creator has not been asked yet, and naming
+                        their own rate is the first thing they do. */}
+                    <span className="text-right">
+                      <span className="block text-[12px] uppercase tracking-wide text-ink-3">
+                        Your offer
+                      </span>
+                      <span className="block text-[15px] font-semibold tabular-nums">
+                        {formatNaira(row.item.estimatedFeeKobo)}
+                      </span>
                     </span>
                     <Button
                       variant={isRemoved ? "outline" : "ghost"}
@@ -231,16 +247,19 @@ export function ShortlistReview({
       {/* What approving actually costs, updating as you decide. */}
       <Panel className="lg:sticky lg:top-20">
         <PanelHeader>
-          <PanelTitle>What this commits</PanelTitle>
+          <PanelTitle>What this reserves</PanelTitle>
         </PanelHeader>
         <PanelBody className="space-y-3">
-          <Row label={`Creator fees · ${approved.length}`} value={formatNaira(creatorFees)} />
+          <Row
+            label={`Offers to ${approved.length} creator${approved.length === 1 ? "" : "s"}`}
+            value={formatNaira(creatorFees)}
+          />
           <Row
             label={`SubSquad fee · ${platformFeeBps / 100}%`}
             value={formatNaira(platformFee)}
           />
           <div className="border-t border-ink pt-3">
-            <Row label="Committed from escrow" value={formatNaira(committed)} strong />
+            <Row label="Reserved from escrow" value={formatNaira(committed)} strong />
           </div>
           <Row
             label="Left in escrow"
@@ -259,11 +278,16 @@ export function ShortlistReview({
             </p>
           ) : (
             <p className="text-[12.5px] leading-relaxed text-ink-3">
-              Nothing is sent yet. Approving drafts an invite per creator for you to
-              review before it reaches anyone.
+              Nothing is sent yet. Approving drafts an invite per creator for you
+              to review before it reaches anyone.
             </p>
           )}
         </PanelBody>
+        <PanelFooter>
+          These are the fees you are offering, not what the creators charge. Each
+          one can accept, or name their own rate for you to answer — the total
+          here is the most this shortlist can cost, not what it will.
+        </PanelFooter>
         <div className="space-y-2 border-t border-line p-4">
           <ActionButton
             variant="brand"
@@ -280,7 +304,7 @@ export function ShortlistReview({
             }}
             confirm={{
               title: `Approve ${approved.length} creator${approved.length === 1 ? "" : "s"}?`,
-              body: `This commits ${formatNaira(committed)} from escrow and writes one invite per creator. Nothing is sent — each draft waits for you in Outreach.`,
+              body: `This reserves up to ${formatNaira(committed)} from escrow and writes one invite per creator. Nothing is sent — each draft waits for you in Outreach, and a creator may still name a different rate.`,
               confirmLabel: `Approve ${approved.length} and draft invites`,
             }}
           >
