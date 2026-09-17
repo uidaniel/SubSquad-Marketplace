@@ -107,7 +107,7 @@ export default async function SpacesPage() {
                   </span>
                   <Link
                     href="/wallet/deposit"
-                    className="font-medium text-brand-ink hover:underline"
+                    className="inline-flex min-h-9 items-center font-medium text-brand-ink hover:underline sm:min-h-0"
                   >
                     Add funds
                   </Link>

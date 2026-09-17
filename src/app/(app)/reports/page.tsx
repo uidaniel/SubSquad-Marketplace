@@ -100,7 +100,7 @@ export default async function ReportsPage() {
             action={
               <Link
                 href="/campaigns"
-                className="text-[12.5px] font-medium text-brand-ink hover:underline"
+                className="inline-flex min-h-9 items-center text-[12.5px] font-medium text-brand-ink hover:underline sm:min-h-0"
               >
                 All campaigns
               </Link>

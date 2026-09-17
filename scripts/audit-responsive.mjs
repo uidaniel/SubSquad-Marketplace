@@ -25,6 +25,7 @@ const WIDTHS = [360, 390, 430, 560, 620, 768, 900, 1024, 1280];
 const ROUTES = [
   "/",
   "/campaigns",
+  "/deals",
   "/creators",
   "/wallet",
   "/wallet/deposit",
@@ -87,11 +88,29 @@ async function audit(page, width) {
     const small = [...document.querySelectorAll("button, a[href], [role=button]")].filter(
       (el) => {
         const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0 && r.height < 36;
+        if (r.width === 0 || r.height === 0 || r.height >= 36) return false;
+
+        // A link inside a sentence is not a tap target — it is a word. Padding
+        // it to 36px would break the line it sits in. Only standalone controls
+        // are held to the thumb-sized floor, so this skips any link whose
+        // parent is mostly other text.
+        const own = (el.textContent ?? "").trim().length;
+        const parent = (el.parentElement?.textContent ?? "").trim().length;
+        const inlineInProse = parent > own * 2 && parent - own > 30;
+        return !inlineInProse;
       },
     );
     if (viewportWidth < 768 && small.length > 0) {
-      findings.push(`${small.length} tap targets under 36px`);
+      // Naming them matters. "8 tap targets under 36px" is a number to worry
+      // about; "the client card links are 28px" is something to fix.
+      const named = small
+        .slice(0, 4)
+        .map((el) => {
+          const label = (el.textContent ?? "").trim().slice(0, 24) || el.tagName.toLowerCase();
+          return `${label} (${Math.round(el.getBoundingClientRect().height)}px)`;
+        })
+        .join(", ");
+      findings.push(`${small.length} tap targets under 36px: ${named}`);
     }
 
     // Text nobody can read on a phone.

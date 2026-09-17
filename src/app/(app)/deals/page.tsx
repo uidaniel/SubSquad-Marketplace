@@ -226,7 +226,7 @@ function StageTab({
     <Link
       href={href}
       className={cn(
-        "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors",
+        "flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[13px] font-medium transition-colors sm:py-1.5",
         active
           ? "border-ink bg-ink text-white"
           : "border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink",

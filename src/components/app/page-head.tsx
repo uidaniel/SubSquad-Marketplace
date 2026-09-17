@@ -26,7 +26,10 @@ export function PageHead({
     >
       <div className="min-w-0 flex-1">
         {kicker && <p className="mb-1 text-[13px] text-ink-2">{kicker}</p>}
-        <h1 className="text-[20px] font-semibold leading-tight tracking-[-0.02em] sm:text-[22px]">
+        {/* `text-balance` because a title that has to wrap should wrap evenly.
+            A greeting carrying somebody's full name ran to three ragged lines on
+            a 360px screen; balanced, the same words read as two. */}
+        <h1 className="text-balance text-[19px] font-semibold leading-tight tracking-[-0.02em] sm:text-[22px]">
           {title}
         </h1>
         {subtitle && (
