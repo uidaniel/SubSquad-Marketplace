@@ -73,11 +73,27 @@ export async function GET() {
   const demoMode =
     process.env.DEMO_MODE === "true" || !supabaseUrl || !supabaseAnon;
 
+  // The one combination that can move real money by accident: the dry-run
+  // switch off while a live Paystack secret is configured. Transfers are the
+  // only call that takes money out, and this is the only place that says out
+  // loud which key is loaded — a question nobody should have to answer from
+  // memory before testing a payout.
+  const liveKey = Boolean(process.env.PAYSTACK_SECRET_KEY?.startsWith("sk_live_"));
+  const dryRun = process.env.DRY_RUN !== "false";
+
+  if (liveKey && !dryRun) {
+    problems.push(
+      "DRY_RUN is off and a LIVE Paystack secret key is configured. Creator withdrawals will move real money. Use a test key (sk_test_) until you mean this.",
+    );
+  }
+
   return NextResponse.json(
     {
       ok: problems.length === 0,
       mode: demoMode ? "demo (serving fixtures)" : "live",
-      dryRun: process.env.DRY_RUN !== "false",
+      dryRun,
+      // Never the key, only which kind it is.
+      paystackMode: liveKey ? "LIVE — real money" : "test",
       configured: {
         supabaseUrl,
         supabaseAnonKey: supabaseAnon,

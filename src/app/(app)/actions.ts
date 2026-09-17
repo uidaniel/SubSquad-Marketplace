@@ -10,11 +10,15 @@ import {
   fundingRequiredFor,
 } from "@/lib/ledger/transactions";
 import { releaseDeal } from "@/lib/deals/release";
-import { checkSendAllowed } from "@/lib/messaging/policy";
+import {
+  checkSendAllowed,
+  chooseChannel,
+  UNSOLICITED_COOLDOWN_DAYS,
+} from "@/lib/messaging/policy";
 import { getCurrentOrg, getCurrentUser } from "@/lib/data/queries";
 import { formatNaira, parseNairaInput } from "@/lib/money";
 import { creatorUrl } from "@/lib/domains";
-import { env } from "@/lib/env";
+import { env, integrations } from "@/lib/env";
 import { formatDate } from "@/lib/utils";
 import { one } from "@/lib/data/relations";
 
@@ -245,7 +249,11 @@ export async function approveShortlist(
     .single();
 
   let created = 0;
-  let skipped = 0;
+  const skippedDetail: {
+    handle: string;
+    reason: string;
+    availableFrom: string | null;
+  }[] = [];
 
   // Drafts are written after the loop, all at once. Eighteen sequential model
   // calls would exceed a serverless function's ceiling; in parallel they take
@@ -271,18 +279,46 @@ export async function approveShortlist(
     // Checked before a deal is created, not before it is sent: a creator who
     // cannot be contacted should not end up with a deal sitting against their
     // name that nobody will ever act on.
-    const allowed = checkSendAllowed(
-      {
-        doNotContact: creator.do_not_contact,
-        lastUnsolicitedAt: creator.last_contacted_at,
-        phone: creator.phone,
-        email: creator.email,
-        whatsappOptIn: creator.whatsapp_opt_in,
-      },
-      {},
-    );
+    const contact = {
+      doNotContact: creator.do_not_contact,
+      lastUnsolicitedAt: creator.last_contacted_at,
+      phone: creator.phone,
+      email: creator.email,
+      whatsappOptIn: creator.whatsapp_opt_in,
+    };
+
+    const allowed = checkSendAllowed(contact, {});
     if (!allowed.allowed) {
-      skipped += 1;
+      // Named, with the reason and when they free up. "4 creators were skipped"
+      // tells an agency nothing they can act on, and this is the step where a
+      // whole campaign quietly reaches nobody.
+      skippedDetail.push({
+        handle: creator.handle ?? creator.display_name,
+        reason: allowed.reason,
+        availableFrom:
+          allowed.reason === "rate_limited" && creator.last_contacted_at
+            ? new Date(
+                new Date(creator.last_contacted_at).getTime() +
+                  UNSOLICITED_COOLDOWN_DAYS * 86_400_000,
+              ).toISOString()
+            : null,
+      });
+      continue;
+    }
+
+    // The channel must be one this deployment can actually send on. Drafting a
+    // WhatsApp message when no WhatsApp account is connected produces an
+    // outreach queue full of things that will never go out.
+    const channel = chooseChannel(contact, {
+      whatsapp: integrations.whatsapp,
+      email: integrations.resend,
+    });
+    if (channel === null || channel === "manual") {
+      skippedDetail.push({
+        handle: creator.handle ?? creator.display_name,
+        reason: "no_channel",
+        availableFrom: null,
+      });
       continue;
     }
 
@@ -308,7 +344,7 @@ export async function approveShortlist(
     // which is the rule for everything the platform says on an agency's behalf.
     pendingDrafts.push({
       dealId: deal.id,
-      channel: creator.phone ? "whatsapp" : "email",
+      channel,
       input: {
         creatorFirstName: creator.display_name.split(" ")[0],
         creatorHandle: creator.handle ?? creator.display_name,
@@ -317,11 +353,22 @@ export async function approveShortlist(
         feeKobo: Number(item.estimated_fee_kobo),
         deadline: (campaign?.deadline as string) ?? null,
         inviteUrl: creatorUrl(`/i/${deal.invite_token}`),
-        channel: (creator.phone ? "whatsapp" : "email") as "whatsapp" | "email",
+        channel,
       },
     });
 
     created += 1;
+  }
+
+  // Nobody could be contacted. Leave the shortlist exactly as it was and say
+  // why: marking it approved and flipping the campaign to "outreach" would make
+  // a run that reached nobody look like a run that worked, and the shortlist
+  // would disappear with it.
+  if (created === 0) {
+    return {
+      ok: false,
+      message: `Nothing was sent. ${describeSkips(skippedDetail)} The shortlist is untouched.`,
+    };
   }
 
   await db
@@ -363,10 +410,60 @@ export async function approveShortlist(
     ok: true,
     message:
       `${created} invite${created === 1 ? "" : "s"} drafted and waiting for your approval in Outreach.` +
-      (skipped
-        ? ` ${skipped} creator${skipped === 1 ? " was" : "s were"} skipped — opted out, or contacted in the last week.`
-        : ""),
+      (skippedDetail.length ? ` ${describeSkips(skippedDetail)}` : ""),
   };
+}
+
+/**
+ * Why creators were left out, in words an agency can act on.
+ *
+ * Grouped by reason and naming the handles, because the only useful version of
+ * "4 were skipped" says which four and what to do about it.
+ */
+function describeSkips(
+  skips: { handle: string; reason: string; availableFrom: string | null }[],
+): string {
+  if (skips.length === 0) return "";
+
+  const parts: string[] = [];
+  const by = (reason: string) => skips.filter((s) => s.reason === reason);
+
+  const names = (list: typeof skips) =>
+    list.map((s) => `@${s.handle}`).join(", ");
+
+  const optedOut = by("opted_out");
+  if (optedOut.length) {
+    parts.push(`${names(optedOut)} opted out of being contacted.`);
+  }
+
+  const limited = by("rate_limited");
+  if (limited.length) {
+    // The date is the point: "try again later" is not a plan.
+    const soonest = limited
+      .map((s) => s.availableFrom)
+      .filter((d): d is string => Boolean(d))
+      .sort()[0];
+    parts.push(
+      `${names(limited)} ${limited.length === 1 ? "was" : "were"} contacted in the last ${UNSOLICITED_COOLDOWN_DAYS} days` +
+        (soonest ? `, so they can be approached again from ${formatDate(soonest)}.` : "."),
+    );
+  }
+
+  const noChannel = by("no_channel");
+  if (noChannel.length) {
+    parts.push(
+      `${names(noChannel)} ${noChannel.length === 1 ? "has" : "have"} no email address on file${
+        integrations.resend ? "" : " and email is not configured on this deployment"
+      }.`,
+    );
+  }
+
+  const other = skips.filter(
+    (s) => !["opted_out", "rate_limited", "no_channel"].includes(s.reason),
+  );
+  if (other.length) parts.push(`${names(other)} could not be contacted.`);
+
+  return parts.join(" ");
 }
 
 /* ==========================================================================

@@ -25,6 +25,8 @@ import {
 import { generateShortlist, eligiblePool } from "../src/lib/ai/shortlist";
 import { toBrief } from "../src/lib/data/brief";
 import { formatNaira } from "../src/lib/money";
+import { checkSendAllowed, chooseChannel } from "../src/lib/messaging/policy";
+import { integrations } from "../src/lib/env";
 
 const db = requireServiceClient();
 const stamp = Date.now().toString(36);
@@ -280,6 +282,45 @@ async function main() {
     held >= promised,
     `${formatNaira(held)} held against ${formatNaira(promised)} promised`,
   );
+
+  /* ---- 11. outreach can actually reach somebody --------------------------- */
+
+  // The step the earlier version of this script skipped, and the one that was
+  // broken: it inserted a deal directly rather than asking whether the creator
+  // could be contacted at all. Every seeded creator sat inside the cooldown and
+  // every draft was addressed to WhatsApp, which is not configured — so an
+  // approved shortlist reached nobody and explained itself in four words.
+  const { data: contactable } = await db
+    .from("creators")
+    .select("handle, email, phone, whatsapp_opt_in, do_not_contact, last_contacted_at")
+    .eq("primary_platform", "tiktok");
+
+  const reachable = (contactable ?? []).filter((c) => {
+    const contact = {
+      doNotContact: c.do_not_contact,
+      lastUnsolicitedAt: c.last_contacted_at,
+      phone: c.phone,
+      email: c.email,
+      whatsappOptIn: c.whatsapp_opt_in,
+    };
+    if (!checkSendAllowed(contact, {}).allowed) return false;
+    const channel = chooseChannel(contact, {
+      whatsapp: integrations.whatsapp,
+      email: integrations.resend,
+    });
+    return channel === "email" || channel === "whatsapp";
+  });
+
+  check(
+    "11. At least one creator can be reached on a configured channel",
+    reachable.length > 0,
+    `${reachable.length} of ${(contactable ?? []).length} reachable — channels live: ${
+      [integrations.resend ? "email" : null, integrations.whatsapp ? "whatsapp" : null]
+        .filter(Boolean)
+        .join(", ") || "NONE"
+    }`,
+  );
+
 
   console.log(
     `\n${failures === 0 ? "All steps passed." : `${failures} step(s) FAILED.`}\n`,
