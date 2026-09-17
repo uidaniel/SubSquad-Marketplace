@@ -88,7 +88,7 @@ export default async function SpacesPage() {
                         <li key={c.campaign.id}>
                           <Link
                             href={`/campaigns/${c.campaign.id}`}
-                            className="flex items-center justify-between gap-3 text-[13px]"
+                            className="flex min-h-9 items-center justify-between gap-3 text-[13px] sm:min-h-0"
                           >
                             <span className="truncate font-medium">
                               {c.campaign.name}

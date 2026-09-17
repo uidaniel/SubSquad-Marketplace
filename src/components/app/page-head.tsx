@@ -20,7 +20,12 @@ export function PageHead({
   return (
     <div
       className={cn(
-        "mb-6 flex flex-wrap items-start justify-between gap-4 sm:mb-7",
+        // Stacked on a phone, side by side from sm.
+        //
+        // `flex-wrap` alone let the actions sit next to the title and squeeze
+        // it: a two-word greeting was being broken over three lines at 360px
+        // not because it was long but because it had 180px to live in.
+        "mb-6 flex flex-col items-stretch gap-3 sm:mb-7 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4",
         className,
       )}
     >
