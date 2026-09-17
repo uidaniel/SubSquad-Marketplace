@@ -12,7 +12,7 @@ export function MobileNavButton() {
       type="button"
       aria-label="Open navigation"
       onClick={() => window.dispatchEvent(new CustomEvent(NAV_TOGGLE_EVENT))}
-      className="-ml-1 grid size-9 shrink-0 place-items-center rounded-[var(--radius-sm)] text-ink-2 transition-colors hover:bg-surface hover:text-ink lg:hidden"
+      className="-ml-1 grid size-11 shrink-0 place-items-center rounded-[var(--radius-sm)] text-ink-2 transition-colors hover:bg-surface hover:text-ink lg:hidden"
     >
       <Menu className="size-[18px]" />
     </button>

@@ -12,7 +12,7 @@ function Button() {
       disabled={pending}
       aria-label="Sign out"
       title="Sign out"
-      className="grid size-8 shrink-0 place-items-center rounded-[7px] text-chrome-ink/50 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
+      className="grid size-10 shrink-0 place-items-center rounded-[7px] lg:size-8 text-chrome-ink/50 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
     >
       <LogOut className="size-[15px]" />
     </button>

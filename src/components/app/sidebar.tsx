@@ -116,7 +116,7 @@ export function Sidebar({
         href="/"
         className="mb-3 flex items-center gap-2 px-2 py-1 text-[15px] font-semibold text-white"
       >
-        <span className="grid size-6 place-items-center rounded-[6px] bg-brand text-[11px] font-bold text-white">
+        <span className="grid size-7 place-items-center rounded-[6px] bg-brand text-[12px] font-bold text-white lg:size-6 lg:text-[11px]">
           SS
         </span>
         SubSquad
@@ -126,14 +126,14 @@ export function Sidebar({
         type="button"
         className="mb-4 flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] border border-white/10 px-2.5 py-2 text-left transition-colors hover:bg-white/5"
       >
-        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-info text-[11px] font-semibold text-white">
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-info text-[12px] font-semibold text-white lg:size-7 lg:text-[11px]">
           {initialsOf(orgName)}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-medium text-white">
             {orgName}
           </span>
-          <span className="block truncate text-[11.5px] text-chrome-ink/50">
+          <span className="block truncate text-[12.5px] text-chrome-ink/50 lg:text-[11.5px]">
             {orgSubtitle}
           </span>
         </span>
@@ -143,7 +143,7 @@ export function Sidebar({
       <nav className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none]">
         {groups.map((group) => (
           <div key={group.label} className="mb-4">
-            <p className="px-2.5 pb-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-chrome-ink/40">
+            <p className="px-2.5 pb-1.5 text-[12px] font-medium uppercase tracking-[0.06em] text-chrome-ink/40 lg:text-[11px]">
               {group.label}
             </p>
             <div className="flex flex-col gap-0.5">
@@ -159,7 +159,7 @@ export function Sidebar({
                     href={item.href}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex h-[34px] items-center gap-2.5 rounded-[7px] px-2.5 text-[13.5px] transition-colors",
+                      "flex h-11 items-center gap-2.5 rounded-[7px] px-2.5 text-[15px] transition-colors lg:h-[34px] lg:text-[13.5px]",
                       active
                         ? "bg-white/10 font-medium text-white"
                         : "text-chrome-ink/75 hover:bg-white/5 hover:text-white",
@@ -173,7 +173,7 @@ export function Sidebar({
                     />
                     <span className="flex-1 truncate">{item.label}</span>
                     {item.count ? (
-                      <span className="rounded-full bg-white/10 px-1.5 text-[11px] tabular-nums">
+                      <span className="rounded-full bg-white/10 px-1.5 text-[12px] tabular-nums lg:text-[11px]">
                         {item.count}
                       </span>
                     ) : null}
@@ -187,11 +187,11 @@ export function Sidebar({
 
       <div className="shrink-0 pt-3">
         <div className="rounded-[var(--radius-sm)] bg-white/[0.06] px-3 py-2.5">
-          <p className="text-[11px] text-chrome-ink/50">Held in escrow</p>
+          <p className="text-[12px] text-chrome-ink/50 lg:text-[11px]">Held in escrow</p>
           <p className="mt-0.5 text-[17px] font-semibold tabular-nums text-white">
             {formatNaira(escrowKobo)}
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-chrome-ink/45">
+          <p className="mt-1 text-[12px] leading-snug text-chrome-ink/45 lg:text-[11px]">
             {escrowNote}
           </p>
         </div>
@@ -201,7 +201,7 @@ export function Sidebar({
         {showOps && (
           <Link
             href="/ops"
-            className="flex h-[34px] items-center gap-2.5 rounded-[7px] px-2.5 text-[13.5px] text-chrome-ink/75 transition-colors hover:bg-white/5 hover:text-white"
+            className="flex h-11 items-center gap-2.5 rounded-[7px] px-2.5 text-[15px] text-chrome-ink/75 transition-colors hover:bg-white/5 hover:text-white lg:h-[34px] lg:text-[13.5px]"
           >
             <Shield className="size-[17px] text-chrome-ink/50" />
             Ops console
@@ -209,7 +209,7 @@ export function Sidebar({
         )}
         <Link
           href="/settings"
-          className="flex h-[34px] items-center gap-2.5 rounded-[7px] px-2.5 text-[13.5px] text-chrome-ink/75 transition-colors hover:bg-white/5 hover:text-white"
+          className="flex h-11 items-center gap-2.5 rounded-[7px] px-2.5 text-[15px] text-chrome-ink/75 transition-colors hover:bg-white/5 hover:text-white lg:h-[34px] lg:text-[13.5px]"
         >
           <Settings className="size-[17px] text-chrome-ink/50" />
           Settings
@@ -218,12 +218,12 @@ export function Sidebar({
         <div className="my-3 h-px bg-white/10" />
 
         <div className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5">
-          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-ok text-[11px] font-semibold text-white">
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-ok text-[12px] font-semibold text-white lg:size-7 lg:text-[11px]">
             {initialsOf(userName)}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] text-white">{userName}</span>
-            <span className="block truncate text-[11.5px] text-chrome-ink/50">
+            <span className="block truncate text-[12.5px] text-chrome-ink/50 lg:text-[11.5px]">
               {userRole}
             </span>
           </span>

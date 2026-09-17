@@ -67,7 +67,7 @@ export function Topbar({
         <Link
           href="/notifications"
           aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
-          className="relative grid size-9 place-items-center rounded-[var(--radius-sm)] text-ink-2 transition-colors hover:bg-surface hover:text-ink"
+          className="relative grid size-11 place-items-center rounded-[var(--radius-sm)] lg:size-9 text-ink-2 transition-colors hover:bg-surface hover:text-ink"
         >
           <Bell className="size-[18px]" />
           {unread ? (
