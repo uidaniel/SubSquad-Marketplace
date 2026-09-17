@@ -170,13 +170,42 @@ export async function accountFor(
   const db = requireServiceClient();
   let query = db.from("ledger_accounts").select("id").eq("kind", kind);
 
-  for (const [column, value] of [
-    ["space_id", scope.spaceId],
-    ["campaign_id", scope.campaignId],
-    ["creator_id", scope.creatorId],
-    ["deal_id", scope.dealId],
-  ] as const) {
-    query = value ? query.eq(column, value) : query.is(column, null);
+  // Match on what identifies this kind of account, not on every scope column.
+  //
+  // Treating an unspecified column as "must be null" meant that asking for a
+  // campaign's escrow by campaign id alone did not find the account that
+  // already existed — it had a space_id — so the insert collided with the
+  // unique index instead. A caller should not have to know which of the four
+  // scope columns a kind happens to store in order to look it up.
+  const IDENTIFIES: Record<AccountKind, readonly (keyof typeof columns)[]> = {
+    space_wallet: ["space_id"],
+    campaign_escrow: ["campaign_id", "deal_id"],
+    creator_wallet: ["creator_id"],
+    platform_fees: [],
+    dispute_reserve: [],
+    paystack_clearing: [],
+    payout_clearing: [],
+  };
+
+  const columns = {
+    space_id: scope.spaceId,
+    campaign_id: scope.campaignId,
+    creator_id: scope.creatorId,
+    deal_id: scope.dealId,
+  } as const;
+
+  const identifying = IDENTIFIES[kind];
+
+  if (identifying.length === 0) {
+    // Platform-level: one per kind, scoped to nothing.
+    for (const column of Object.keys(columns) as (keyof typeof columns)[]) {
+      query = query.is(column, null);
+    }
+  } else {
+    for (const column of identifying) {
+      const value = columns[column];
+      query = value ? query.eq(column, value) : query.is(column, null);
+    }
   }
 
   const { data: found } = await query.maybeSingle();

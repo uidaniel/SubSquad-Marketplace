@@ -146,7 +146,8 @@ export async function pendingRates(orgId: string): Promise<PendingRate[]> {
  */
 export async function acceptRate(
   dealId: string,
-  agreedBy: string,
+  /** The person agreeing. Null only where there is no signed-in user. */
+  agreedBy: string | null,
 ): Promise<RateOutcome> {
   const db = requireServiceClient();
 
@@ -181,7 +182,14 @@ export async function acceptRate(
     };
   }
 
-  await db
+  // Checked, not assumed.
+  //
+  // This update silently did nothing when `rate_agreed_by` held an id that was
+  // not a real user — the foreign key refused it, supabase-js returned the
+  // error in a field nobody read, and the function reported success while the
+  // deal sat untouched in "negotiating". A write that moves a fee has to say so
+  // when it fails.
+  const { error } = await db
     .from("deals")
     .update({
       fee_kobo: proposed,
@@ -191,6 +199,13 @@ export async function acceptRate(
       rate_agreed_by: agreedBy,
     })
     .eq("id", dealId);
+
+  if (error) {
+    return {
+      ok: false,
+      message: `Could not agree that rate: ${error.message}`,
+    };
+  }
 
   await db.from("deal_messages").insert({
     deal_id: dealId,
@@ -245,7 +260,7 @@ export async function counterRate(
     };
   }
 
-  await db
+  const { error: counterError } = await db
     .from("deals")
     .update({
       fee_kobo: amountKobo,
@@ -254,6 +269,10 @@ export async function counterRate(
       rate_note: null,
     })
     .eq("id", dealId);
+
+  if (counterError) {
+    return { ok: false, message: `Could not send that offer: ${counterError.message}` };
+  }
 
   await db.from("deal_messages").insert({
     deal_id: dealId,
@@ -278,7 +297,7 @@ export async function declineRate(
 ): Promise<RateOutcome> {
   const db = requireServiceClient();
 
-  await db
+  const { error: declineError } = await db
     .from("deals")
     .update({
       status: "declined",
@@ -286,6 +305,10 @@ export async function declineRate(
       rate_agreed_at: new Date().toISOString(),
     })
     .eq("id", dealId);
+
+  if (declineError) {
+    return { ok: false, message: `Could not decline: ${declineError.message}` };
+  }
 
   await db.from("deal_messages").insert({
     deal_id: dealId,

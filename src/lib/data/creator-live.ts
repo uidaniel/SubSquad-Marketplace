@@ -147,7 +147,9 @@ export async function getInviteByToken(token: string) {
   const db = requireServiceClient();
   const { data } = await db
     .from("deals")
-    .select("*, creators(*), campaigns(*)")
+    .select(
+      "*, creators(*), campaigns(*, orgs(name, verified_at, cac_number)), campaign_slots(deliverable_type, count)",
+    )
     .eq("invite_token", token)
     .maybeSingle();
 
@@ -160,11 +162,32 @@ export async function getInviteByToken(token: string) {
   const campaign = campaignRow ? toCampaign(campaignRow) : null;
   const deal = toDeal(data as Record<string, unknown>);
 
+  // Who is running this campaign, and whether we have checked them.
+  //
+  // A creator is being asked to trust a company they have never heard of on the
+  // word of a platform they have never heard of. Naming the agency and saying
+  // plainly whether they are verified is the least we can do — and it is what
+  // the partnership panel on the page is built from.
+  const orgRow = campaignRow ? one(campaignRow.orgs) : null;
+
+  const slot = one(data.campaign_slots) as
+    | { deliverable_type?: string; count?: number }
+    | undefined;
+
   return {
     deal,
     creator: toCreator(creatorRow),
     campaign,
     brandName: campaign?.endBrandName ?? "A brand",
+    agencyName: (orgRow?.name as string) ?? null,
+    agencyVerified: Boolean(orgRow?.verified_at),
+    agencyCac: (orgRow?.cac_number as string) ?? null,
+    agencyVerifiedAt: (orgRow?.verified_at as string) ?? null,
+    deliverableType: slot?.deliverable_type ?? null,
+    deliverableCount: Number(slot?.count ?? 1),
+    /** The rate this creator has asked for and is waiting to hear back on. */
+    proposedFeeKobo: data.proposed_fee_kobo ? Number(data.proposed_fee_kobo) : null,
+    rateProposedAt: (data.rate_proposed_at as string | null) ?? null,
     // A creator-initiated deal has its escrow per deal rather than per campaign;
     // what is held for it is simply its own fee.
     escrowHeldKobo: campaign ? await escrowFor(campaign.id) : deal.feeKobo,

@@ -9,6 +9,8 @@ import {
   DEMO_CREATORS,
   DEMO_DEALS,
   DEMO_DRAFTS,
+  DEMO_ORG,
+  DEMO_SLOTS,
   DEMO_SPACES,
   demoBalances,
   escrowAccountFor,
@@ -31,6 +33,25 @@ export interface InviteView {
   creator: Creator;
   campaign: Campaign | null;
   brandName: string;
+  /**
+   * The agency running the campaign, and whether we have checked them.
+   *
+   * A creator is being asked to trust a company they have never heard of on the
+   * word of a platform they have never heard of. Naming who is behind it, and
+   * being honest about whether it has been verified, is the least the page owes
+   * them.
+   */
+  agencyName: string | null;
+  agencyVerified: boolean;
+  /** Their company registration number, when we hold one. */
+  agencyCac: string | null;
+  agencyVerifiedAt: string | null;
+  /** What they would actually be making. */
+  deliverableType: string | null;
+  deliverableCount: number;
+  /** A rate this creator has named and is waiting to hear back on. */
+  proposedFeeKobo: Kobo | null;
+  rateProposedAt: string | null;
   /** What the campaign holds in total — evidence the offer is funded. */
   escrowHeldKobo: Kobo;
 }
@@ -46,11 +67,21 @@ async function demo_getInviteByToken(token: string): Promise<InviteView | null> 
     ? (DEMO_CAMPAIGNS.find((c) => c.id === deal.campaignId) ?? null)
     : null;
 
+  const slot = DEMO_SLOTS.find((s) => s.campaignId === deal.campaignId);
+
   return {
     deal,
     creator,
     campaign,
     brandName: campaign?.endBrandName ?? "A brand",
+    agencyName: DEMO_ORG.name,
+    agencyVerified: true,
+    agencyCac: DEMO_ORG.cacNumber ?? null,
+    agencyVerifiedAt: DEMO_ORG.verifiedAt ?? null,
+    deliverableType: slot?.deliverableType ?? null,
+    deliverableCount: 1,
+    proposedFeeKobo: null,
+    rateProposedAt: null,
     escrowHeldKobo: campaign
       ? (demoBalances().get(escrowAccountFor(campaign.id)) ?? 0)
       : deal.feeKobo,

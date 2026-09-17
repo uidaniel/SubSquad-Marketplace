@@ -28,6 +28,7 @@ import { formatNaira } from "../src/lib/money";
 import { checkSendAllowed, chooseChannel } from "../src/lib/messaging/policy";
 import { integrations } from "../src/lib/env";
 import { acceptRate, counterRate, pendingRates } from "../src/lib/deals/rates";
+import { getInviteByToken } from "../src/lib/data/creator-live";
 
 const db = requireServiceClient();
 const stamp = Date.now().toString(36);
@@ -404,6 +405,26 @@ async function main() {
   // behind — marked `approved` with no deal — because that state is live in the
   // database right now and the fix has to recover from it, not just avoid
   // creating it.
+  // One of this run's creators is put on the shortlist by hand first.
+  //
+  // The model picks from the whole index, so on some runs it shortlists only
+  // real creators and this step had nothing of its own to assert on — which
+  // made it fail for reasons that had nothing to do with the code under test.
+  // A step that passes or fails on the model's mood is not a test.
+  const seeded = creatorIds[creatorIds.length - 1];
+  await db.from("shortlist_items").upsert(
+    {
+      campaign_id: campaign!.id,
+      creator_id: seeded,
+      slot_id: slot!.id,
+      status: "proposed",
+      fit_score: 80,
+      estimated_fee_kobo: 1_200_000,
+      ai_reasoning: "Seeded by the verification run.",
+    },
+    { onConflict: "campaign_id,creator_id" },
+  );
+
   await db
     .from("shortlist_items")
     .update({ status: "approved" })
@@ -503,7 +524,9 @@ async function main() {
         : "the deal never appeared in the queue",
     );
 
-    const accepted = await acceptRate(firstDeal.id, org!.id);
+    // No signed-in user in a script, and `rate_agreed_by` is a real foreign key
+    // into auth.users — passing an org id here is what exposed the silent write.
+    const accepted = await acceptRate(firstDeal.id, null);
     const { data: settled } = await db
       .from("deals")
       .select("fee_kobo, status, proposed_fee_kobo, rate_agreed_at")
@@ -542,6 +565,42 @@ async function main() {
     } else {
       check("15. Escrow ceiling", true, "only one deal on this campaign — skipped");
     }
+  }
+
+
+  /* ---- 16. the creator's deal page has something to render ---------------- */
+
+  // Not a screenshot — the data the page is built from. A tabbed page showing
+  // the brief, the timeline and the authorisation panel is only as good as the
+  // fields behind it, and every one of those was added today.
+  const { data: anyDeal } = await db
+    .from("deals")
+    .select("invite_token")
+    .eq("campaign_id", campaign!.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!anyDeal) {
+    check("16. Creator deal page", false, "no deal to view");
+  } else {
+    const view = await getInviteByToken(anyDeal.invite_token as string);
+    const missing: string[] = [];
+    if (!view) missing.push("the invite resolved to nothing");
+    else {
+      if (!view.campaign?.brief.product) missing.push("brief.product");
+      if (!view.deliverableType) missing.push("deliverableType");
+      if (!view.agencyName) missing.push("agencyName");
+      if (view.escrowHeldKobo <= 0) missing.push("escrowHeldKobo");
+      if (!view.brandName) missing.push("brandName");
+    }
+
+    check(
+      "16. The creator deal page has a brief, a deliverable, an agency and escrow",
+      missing.length === 0,
+      missing.length === 0
+        ? `${view!.deliverableCount} x ${view!.deliverableType} for ${view!.brandName}, run by ${view!.agencyName}, ${formatNaira(view!.escrowHeldKobo)} held`
+        : `missing: ${missing.join(", ")}`,
+    );
   }
 
 
