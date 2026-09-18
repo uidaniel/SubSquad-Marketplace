@@ -26,7 +26,7 @@ const VIEWPORTS = [
   { name: "phone", width: 390, height: 844 },
 ];
 
-const PUBLIC = ["/home", "/for-agencies", "/for-creators", "/pricing", "/login", "/signup", "/signup/check-email", "/legal/terms", "/legal/creator-agreement"];
+const PUBLIC = ["/home", "/for-agencies", "/for-brands", "/for-creators", "/pricing", "/trust", "/login", "/signup", "/signup/check-email", "/legal/terms", "/legal/creator-agreement"];
 
 const ORG = [
   "/",

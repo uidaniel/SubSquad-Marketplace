@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Figtree, Sora } from "next/font/google";
+import { Motion } from "@/components/marketing/motion";
 import { MarketingFooter, MarketingHeader } from "@/components/marketing/shell";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +10,11 @@ import { cn } from "@/lib/utils";
  * Its own fonts (the Design Language's Sora and Figtree; the app keeps Geist)
  * and its own colour scope, applied by the `marketing` class in globals.css.
  * Nothing here needs a session, and nothing in the app layout is loaded.
+ *
+ * The inline script decides, before first paint, whether the page animates:
+ * it adds `motion` to <html> unless the person has asked for reduced motion.
+ * The stylesheet hides the animated elements only under that class, so a
+ * page with no script is a still page, never a blank one.
  */
 
 const sora = Sora({
@@ -34,6 +40,9 @@ export const metadata: Metadata = {
     "Escrow-backed creator campaigns in Nigeria. The money is held before anyone is contacted, and released when the post is verified live.",
 };
 
+const MOTION_GATE =
+  "try{if(!matchMedia('(prefers-reduced-motion: reduce)').matches)document.documentElement.classList.add('motion')}catch(e){}";
+
 export default function MarketingLayout({
   children,
 }: {
@@ -47,6 +56,8 @@ export default function MarketingLayout({
         "marketing flex min-h-screen flex-col",
       )}
     >
+      <script dangerouslySetInnerHTML={{ __html: MOTION_GATE }} />
+      <Motion />
       <MarketingHeader />
       <main className="flex-1">{children}</main>
       <MarketingFooter />

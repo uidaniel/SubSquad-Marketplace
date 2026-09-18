@@ -25,8 +25,10 @@ const WIDTHS = [360, 390, 430, 560, 620, 768, 900, 1024, 1280];
 const ROUTES = [
   "/home",
   "/for-agencies",
+  "/for-brands",
   "/for-creators",
   "/pricing",
+  "/trust",
   "/",
   "/campaigns",
   "/deals",

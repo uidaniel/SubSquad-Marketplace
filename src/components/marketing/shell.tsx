@@ -38,9 +38,11 @@ export function Wordmark() {
 }
 
 const NAV = [
-  { href: "/for-agencies", label: "For agencies" },
-  { href: "/for-creators", label: "For creators" },
+  { href: "/for-agencies", label: "Agencies" },
+  { href: "/for-brands", label: "Brands" },
+  { href: "/for-creators", label: "Creators" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/trust", label: "Trust" },
 ] as const;
 
 export function MarketingHeader() {
@@ -93,7 +95,10 @@ const FOOTER = [
   {
     title: "Product",
     links: [
-      ...NAV,
+      { href: "/for-agencies", label: "For agencies" },
+      { href: "/for-brands", label: "For brands" },
+      { href: "/pricing", label: "Pricing" },
+      { href: "/trust", label: "Trust and escrow" },
       { href: "/legal/terms", label: "Terms of service" },
     ],
   },

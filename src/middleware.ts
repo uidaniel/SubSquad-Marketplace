@@ -20,8 +20,10 @@ const PUBLIC_PREFIXES = [
   // The marketing site. "/" itself is rewritten to /home for visitors below.
   "/home",
   "/for-agencies",
+  "/for-brands",
   "/for-creators",
   "/pricing",
+  "/trust",
   "/login",
   "/signup",
   "/forgot-password",
@@ -162,9 +164,10 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Everything except Next's own assets and image files. An auth check on a
-     * font request costs latency and protects nothing.
+     * Everything except Next's own assets and static files. An auth check on a
+     * font request costs latency and protects nothing — and one on a video
+     * request redirected the marketing hero's film to the sign-in page.
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?|mp4|webm|txt|xml)$).*)",
   ],
 };

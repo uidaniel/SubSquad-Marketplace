@@ -16,12 +16,13 @@ import { cn } from "@/lib/utils";
 export function Wrap({
   className,
   children,
+  ...rest
 }: {
   className?: string;
   children: React.ReactNode;
-}) {
+} & Record<`data-${string}`, string | boolean | undefined>) {
   return (
-    <div className={cn("mx-auto w-full max-w-[1180px] px-5 sm:px-8", className)}>
+    <div className={cn("mx-auto w-full max-w-[1180px] px-5 sm:px-8", className)} {...rest}>
       {children}
     </div>
   );
@@ -46,14 +47,15 @@ export function Display({
   size = "l",
   className,
   children,
+  ...rest
 }: {
   as?: "h1" | "h2" | "h3" | "p";
   size?: keyof typeof DISPLAY;
   className?: string;
   children: React.ReactNode;
-}) {
+} & Record<`data-${string}`, string | boolean | undefined>) {
   return (
-    <Tag className={cn("font-display font-semibold", DISPLAY[size], className)}>
+    <Tag className={cn("font-display font-semibold", DISPLAY[size], className)} {...rest}>
       {children}
     </Tag>
   );
@@ -89,14 +91,16 @@ export function Hero({
         )}
       >
         <div>
-          <Eyebrow>{eyebrow}</Eyebrow>
-          <Display as="h1" size="xl" className="mt-4 max-w-[13ch]">
+          <p data-hero>
+            <Eyebrow>{eyebrow}</Eyebrow>
+          </p>
+          <Display as="h1" size="xl" className="mt-4 max-w-[13ch]" data-hero>
             {title}
           </Display>
-          <p className="mt-6 max-w-[44ch] text-[17px] leading-relaxed text-ink-2 sm:text-[18px]">
+          <p data-hero className="mt-6 max-w-[44ch] text-[17px] leading-relaxed text-ink-2 sm:text-[18px]">
             {lede}
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div data-hero className="mt-8 flex flex-wrap gap-3">
             <Button variant="brand" size="lg" asChild>
               <Link href={primary.href}>
                 {primary.label} <ArrowRight />
@@ -109,7 +113,7 @@ export function Hero({
             )}
           </div>
           {ticks && (
-            <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2">
+            <ul data-hero className="mt-8 flex flex-wrap gap-x-6 gap-y-2">
               {ticks.map((tick) => (
                 <li key={tick} className="flex items-center gap-2 text-[14px] text-ink-2">
                   <Check className="size-4 text-ok" aria-hidden />
@@ -119,7 +123,11 @@ export function Hero({
             </ul>
           )}
         </div>
-        {aside && <div className="min-w-0">{aside}</div>}
+        {aside && (
+          <div data-hero className="min-w-0">
+            {aside}
+          </div>
+        )}
       </Wrap>
     </section>
   );
@@ -250,6 +258,7 @@ export function Register({
         {items.map((item) => (
           <article
             key={item.n}
+            data-reveal
             className="grid gap-6 border-t border-line py-12 first:border-t-0 sm:py-16 lg:grid-cols-[110px_minmax(0,1fr)_minmax(0,440px)] lg:gap-10"
           >
             <p className="font-display text-[22px] font-semibold tabular-nums text-brand-ink lg:sticky lg:top-24 lg:self-start">
@@ -371,7 +380,7 @@ export function Doors({
 }) {
   return (
     <section className="border-t border-line">
-      <Wrap className="grid gap-px overflow-hidden py-14 sm:py-20 md:grid-cols-2 md:gap-8">
+      <Wrap data-reveal-group className="grid gap-px overflow-hidden py-14 sm:py-20 md:grid-cols-2 md:gap-8">
         {items.map((item) => (
           <Link
             key={item.href}
@@ -410,7 +419,7 @@ export function Closing({
 }) {
   return (
     <section className="border-t border-line">
-      <Wrap className="flex flex-col items-start gap-6 py-16 sm:py-24 md:flex-row md:items-end md:justify-between">
+      <Wrap data-reveal className="flex flex-col items-start gap-6 py-16 sm:py-24 md:flex-row md:items-end md:justify-between">
         <Display as="h2" size="xl" className="max-w-[14ch]">
           {title}
         </Display>
