@@ -2,6 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
+   * Which commit this build is. Netlify sets COMMIT_REF while building and
+   * not inside the running function, so it has to be baked in here — `env`
+   * values are inlined at build time — for /api/health to report it.
+   */
+  env: {
+    BUILD_COMMIT: process.env.COMMIT_REF?.slice(0, 7) ?? "",
+  },
+
+  /**
    * Kept out of the server bundle and required from node_modules instead.
    *
    * Netlify serves every route from one function, so anything bundled into the
