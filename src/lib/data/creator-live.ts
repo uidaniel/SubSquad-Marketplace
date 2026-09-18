@@ -9,6 +9,7 @@ import type { Brief, Campaign, Creator, Deal, Draft,
 import type { Kobo } from "@/lib/money";
 import { createClient } from "@/lib/supabase/server";
 import { toCreator, toProfile, toScore } from "./mappers";
+import { findOrClaimCreatorRow } from "@/lib/auth/creator-link";
 
 /**
  * The creator surface, against Postgres.
@@ -349,33 +350,10 @@ export async function getCurrentCreator(): Promise<Creator | null> {
   }
   if (!user) return null;
 
-  const db = requireServiceClient();
-
-  const { data: linked } = await db
-    .from("creators")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (linked) return toCreator(linked);
-
-  if (!user.email) return null;
-
-  const { data: unclaimed } = await db
-    .from("creators")
-    .select("*")
-    .ilike("email", user.email)
-    .is("user_id", null)
-    .limit(1)
-    .maybeSingle();
-  if (!unclaimed) return null;
-
-  await db
-    .from("creators")
-    .update({ user_id: user.id })
-    .eq("id", unclaimed.id)
-    .is("user_id", null);
-
-  return toCreator({ ...unclaimed, user_id: user.id });
+  // The same lookup the session gate uses, so the two can never disagree
+  // about who is a creator.
+  const row = await findOrClaimCreatorRow({ id: user.id, email: user.email });
+  return row ? toCreator(row) : null;
 }
 
 /**

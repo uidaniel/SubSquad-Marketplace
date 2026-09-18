@@ -90,6 +90,9 @@ export async function GET() {
   return NextResponse.json(
     {
       ok: problems.length === 0,
+      // Which build is answering. Netlify sets COMMIT_REF at build time; it is
+      // how "is the fix live yet?" gets a real answer instead of a guess.
+      commit: process.env.COMMIT_REF?.slice(0, 7) ?? null,
       mode: demoMode ? "demo (serving fixtures)" : "live",
       dryRun,
       // Never the key, only which kind it is.

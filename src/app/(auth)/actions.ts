@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createOrgForUser } from "@/lib/auth/session";
 import { env } from "@/lib/env";
+import { findOrClaimCreatorRow } from "@/lib/auth/creator-link";
 
 /**
  * Sign in, sign up, sign out.
@@ -51,11 +52,9 @@ export async function signIn(
   // the dashboard would bounce them into agency sign-up; their home is
   // /creator. An explicit `next` always wins — it is where they were going.
   if (next === "/" && data.user) {
-    const { data: creator } = await supabase
-      .from("creators")
-      .select("id")
-      .eq("user_id", data.user.id)
-      .maybeSingle();
+    // Found or claimed by email — a creator signing in for the first time has
+    // a seeded row that nothing has linked to them yet.
+    const creator = await findOrClaimCreatorRow({ id: data.user.id, email: data.user.email });
     if (creator) redirect("/creator");
   }
 

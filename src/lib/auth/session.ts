@@ -7,6 +7,7 @@ import { one } from "@/lib/data/relations";
 import { requireServiceClient } from "@/lib/supabase/service";
 import { env } from "@/lib/env";
 import type { Org, OrgMember } from "@/lib/domain";
+import { findOrClaimCreatorRow } from "@/lib/auth/creator-link";
 
 /**
  * Who is asking.
@@ -144,13 +145,9 @@ export const getSessionCreator = cache(async () => {
   const user = await currentUser(supabase);
   if (!user) return null;
 
-  const { data } = await supabase
-    .from("creators")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  return data ?? null;
+  // By user_id, or by claiming the unclaimed row with this email. Matching on
+  // user_id alone sent a freshly signed-up creator to "about your company".
+  return findOrClaimCreatorRow({ id: user.id, email: user.email });
 });
 
 /**

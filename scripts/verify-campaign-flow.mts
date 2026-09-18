@@ -29,11 +29,13 @@ import { checkSendAllowed, chooseChannel } from "../src/lib/messaging/policy";
 import { integrations } from "../src/lib/env";
 import { acceptRate, counterRate, declineRate, pendingRates } from "../src/lib/deals/rates";
 import { notifyDealClosed } from "../src/lib/deals/notify";
+import { findOrClaimCreatorRow } from "../src/lib/auth/creator-link";
 import { getInviteByToken } from "../src/lib/data/creator-live";
 
 const db = requireServiceClient();
 const stamp = Date.now().toString(36);
 const cleanup: { table: string; id: string }[] = [];
+const authCleanup: string[] = [];
 
 let failures = 0;
 function check(step: string, ok: boolean, detail: string) {
@@ -670,6 +672,45 @@ async function main() {
     );
   }
 
+  /* ---- 18. a creator who signs in is recognised ---------------------------- */
+
+  // Creators are seeded with an email and no account. When they sign up and
+  // land on "/", the gate judged "creator or not" by user_id alone, found
+  // nothing, and sent them to "tell us about your company". It happened to a
+  // real creator on the day they signed up.
+  const { data: seededCreator } = await db
+    .from("creators")
+    .select("id, email, handle")
+    .eq("id", creatorIds[0])
+    .maybeSingle();
+  if (!seededCreator?.email) {
+    check("18. A signed-in creator is recognised by email", false, "no seeded creator to sign in as");
+  } else {
+    const { data: made, error: makeError } = await db.auth.admin.createUser({
+      email: seededCreator.email,
+      email_confirm: true,
+      password: `verify-${stamp}-Aa1!`,
+    });
+    if (makeError || !made.user) {
+      check("18. A signed-in creator is recognised by email", false, makeError?.message ?? "could not create the user");
+    } else {
+      authCleanup.push(made.user.id);
+      const row = await findOrClaimCreatorRow({ id: made.user.id, email: made.user.email });
+      const { data: after } = await db
+        .from("creators")
+        .select("user_id")
+        .eq("id", seededCreator.id)
+        .maybeSingle();
+      check(
+        "18. A signed-in creator is recognised by email and their row is claimed",
+        row?.id === seededCreator.id && after?.user_id === made.user.id,
+        row
+          ? `resolved to @${row.handle}, user_id now ${after?.user_id === made.user.id ? "linked" : "NOT linked"}`
+          : "the lookup found nobody",
+      );
+    }
+  }
+
   console.log(
     `\n${failures === 0 ? "All steps passed." : `${failures} step(s) FAILED.`}\n`,
   );
@@ -712,6 +753,9 @@ async function removeEverything() {
 
   for (const { table, id } of [...cleanup].reverse()) {
     await db.from(table).delete().eq("id", id);
+  }
+  for (const id of authCleanup) {
+    await db.auth.admin.deleteUser(id);
   }
   console.log("Cleaned up everything this run created.");
 }
