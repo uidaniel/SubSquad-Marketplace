@@ -23,6 +23,10 @@ const PASSWORD = process.env.E2E_PASSWORD ?? "subsquad-demo";
 const WIDTHS = [360, 390, 430, 560, 620, 768, 900, 1024, 1280];
 
 const ROUTES = [
+  "/home",
+  "/for-agencies",
+  "/for-creators",
+  "/pricing",
   "/",
   "/campaigns",
   "/deals",

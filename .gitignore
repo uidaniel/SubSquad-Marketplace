@@ -21,3 +21,7 @@ playwright/.auth/
 test-results/
 playwright-report/
 seed-test-user.mjs
+
+# Playwright screenshot output (scripts/screenshot-all.mjs, scripts/shot-marketing.mjs)
+shots/
+*-shots/

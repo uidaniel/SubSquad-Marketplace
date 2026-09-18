@@ -17,6 +17,11 @@ import { surfaceForHost } from "@/lib/domains";
 
 /** Reachable without signing in. Everything else on the org app needs a session. */
 const PUBLIC_PREFIXES = [
+  // The marketing site. "/" itself is rewritten to /home for visitors below.
+  "/home",
+  "/for-agencies",
+  "/for-creators",
+  "/pricing",
   "/login",
   "/signup",
   "/forgot-password",
@@ -125,6 +130,15 @@ export async function middleware(request: NextRequest) {
   const isPublic = PUBLIC_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(prefix),
   );
+
+  // The front door. A visitor at the root gets the marketing site; somebody
+  // signed in gets their dashboard. A rewrite, so the address stays "/" and
+  // the same link works for both.
+  if (!user && pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/home";
+    return NextResponse.rewrite(url);
+  }
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

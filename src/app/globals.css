@@ -263,3 +263,64 @@
     display: none;
   }
 }
+
+/* ==========================================================================
+   Marketing surface
+
+   The public pages are "a receipt you can trust", taken literally: a cream
+   page, paper cards, ink, sand hairlines and one tangerine action. They
+   re-point the same tokens the app uses rather than defining new ones, so
+   every component works unchanged inside them — a Button is still a Button —
+   and the app itself never changes colour.
+   ========================================================================== */
+
+@layer base {
+  .marketing {
+    --color-ground: #fff3e6;
+    --color-surface: #fffbf7;
+    --color-surface-2: #fff8f0;
+    --color-line: #e8dccb;
+    --color-line-strong: #d6c6b0;
+    --color-ink: #0b0f1a;
+    --color-ink-2: #5b6070;
+    --color-ink-3: #8b909d;
+    --font-sans: var(--font-figtree), system-ui, sans-serif;
+    --font-display: var(--font-sora), var(--font-figtree), system-ui, sans-serif;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    background: var(--color-ground);
+    color: var(--color-ink);
+  }
+}
+
+/* Display type: Sora on the marketing pages, the product font everywhere else. */
+@utility font-display {
+  font-family: var(--font-display, var(--font-sans));
+}
+
+/* A perforated tear-line, for the receipt. The notches are painted in the
+   colour behind the receipt — the page, unless a band says otherwise. */
+@utility perf {
+  position: relative;
+  border-top: 1.5px dashed var(--color-line-strong);
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    top: -10px;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--perf-bg, var(--color-ground));
+    border: 1px solid var(--color-line);
+  }
+  &::before {
+    left: -10px;
+    clip-path: inset(0 0 0 50%);
+  }
+  &::after {
+    right: -10px;
+    clip-path: inset(0 50% 0 0);
+  }
+}
