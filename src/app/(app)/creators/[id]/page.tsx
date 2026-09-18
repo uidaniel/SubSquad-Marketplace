@@ -190,7 +190,7 @@ export default async function CreatorProfilePage({
                 <PanelTitle>Deals with you</PanelTitle>
               </PanelHeader>
               <TableWrap>
-                <Table>
+                <Table labels={["Campaign", "Status", "Fee", "Published"]}>
                   <THead>
                     <TR className="hover:bg-transparent">
                       <TH>Campaign</TH>

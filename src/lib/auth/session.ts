@@ -116,7 +116,15 @@ export async function requireSession(): Promise<Session> {
   if (!session) {
     const supabase = await createClient();
     const user = await currentUser(supabase);
-    redirect(user ? "/signup/org" : "/login");
+    if (!user) redirect("/login");
+
+    // A creator is a signed-in user with no org. Sending them to "tell us
+    // about your company" asks somebody who makes videos for a CAC number —
+    // it happened to a real creator on the day they signed up. Their surface
+    // is /creator, and it can tell them apart from someone who genuinely
+    // stopped halfway through agency sign-up.
+    const creator = await getSessionCreator();
+    redirect(creator ? "/creator" : "/signup/org");
   }
   return session;
 }
@@ -206,3 +214,23 @@ export async function createOrgForUser(args: {
 
   return { orgId: org.id };
 }
+
+/**
+ * Whether the signed-in user works at SubSquad.
+ *
+ * Read through the user's own client, so the `platform_staff` policy decides:
+ * a non-member cannot see the roster at all and gets nothing back. The sidebar
+ * used to show "Ops console" to every agency, and every agency got a 404.
+ */
+export const getIsStaff = cache(async (): Promise<boolean> => {
+  if (env.demoMode) return true;
+  const supabase = await createClient();
+  const user = await currentUser(supabase);
+  if (!user) return false;
+  const { data } = await supabase
+    .from("platform_staff")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return Boolean(data);
+});

@@ -24,9 +24,12 @@ export default async function LoginPage({
         <LoginForm next={next ?? "/"} />
       </div>
 
+      {/* One door for everyone. This used to say creators do not sign in here
+          and to wait for a WhatsApp link — on a deployment with no WhatsApp,
+          to creators who now have accounts. */}
       <p className="mt-7 text-[12.5px] leading-relaxed text-ink-3">
-        Creators do not sign in here — you get a link on WhatsApp when a funded
-        deal is waiting for you.
+        Agencies, brands and creators all sign in here. If you are a creator,
+        you will land on your deals.
       </p>
     </>
   );

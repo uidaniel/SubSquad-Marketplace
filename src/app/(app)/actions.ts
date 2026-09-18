@@ -21,6 +21,7 @@ import { creatorUrl } from "@/lib/domains";
 import { env, integrations } from "@/lib/env";
 import { formatDate } from "@/lib/utils";
 import { one } from "@/lib/data/relations";
+import { notifyDealsClosed } from "@/lib/deals/notify";
 
 /**
  * Everything the org app can change.
@@ -1171,11 +1172,15 @@ export async function cancelCampaign(
 
     // Invited creators are told, and their deals closed. An invite left open on
     // a cancelled campaign is how somebody does work nobody will pay for.
-    await db
+    const { data: invitedDeals } = await db
       .from("deals")
-      .update({ status: "cancelled" })
+      .select("id")
       .eq("campaign_id", campaignId)
       .eq("status", "invited");
+    const invitedIds = (invitedDeals ?? []).map((d) => d.id as string);
+    if (invitedIds.length) {
+      await db.from("deals").update({ status: "cancelled" }).in("id", invitedIds);
+    }
 
     // Unsent drafts for those invites are pointless now.
     const { data: openDeals } = await db
@@ -1201,6 +1206,21 @@ export async function cancelCampaign(
       .from("campaigns")
       .update({ status: "cancelled" })
       .eq("id", campaignId);
+
+    // Told last, once every row above says so, and on the record. The email
+    // must never describe a state the database has not reached.
+    if (invitedIds.length) {
+      await db.from("deal_messages").insert(
+        invitedIds.map((dealId) => ({
+          deal_id: dealId,
+          direction: "outbound",
+          channel: "manual",
+          body: `${campaign.name} was cancelled. ${reason.trim()}`,
+          ai_draft: false,
+        })),
+      );
+      await notifyDealsClosed(invitedIds, "cancelled", reason);
+    }
 
     revalidatePath(`/campaigns/${campaignId}`);
     revalidatePath("/campaigns");

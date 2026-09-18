@@ -314,6 +314,14 @@ export default async function InvitePage({
             <NextStep
               note={`${formatNaira(deal.feeKobo)} has been released to your bank.`}
             />
+          ) : deal.status === "declined" ? (
+            <NextStep
+              note={`${brandName} decided not to go ahead. Nothing is owed and nothing is needed from you.`}
+            />
+          ) : deal.status === "cancelled" ? (
+            <NextStep
+              note={`${brandName} cancelled this campaign before it started. Nothing is needed from you.`}
+            />
           ) : (
             <NextStep note="This deal is closed. Nothing further is needed from you." />
           )}

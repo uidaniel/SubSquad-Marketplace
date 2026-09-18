@@ -219,3 +219,15 @@ export async function getCreatorMoney(creatorId: string) {
 export async function getSpaceName(spaceId: string) {
   return env.demoMode ? demo_getSpaceName(spaceId) : live.getSpaceName(spaceId);
 }
+
+/** The creator's own profile and score — fixtures in demo, theirs in live. */
+export async function getCreatorProfileAndScore(creatorId: string) {
+  if (env.demoMode) {
+    const { DEMO_PROFILES, DEMO_SCORES } = await import("@/lib/demo/data");
+    return {
+      profile: DEMO_PROFILES.find((p) => p.creatorId === creatorId) ?? null,
+      score: DEMO_SCORES.find((s) => s.creatorId === creatorId) ?? null,
+    };
+  }
+  return live.getCreatorProfileAndScore(creatorId);
+}

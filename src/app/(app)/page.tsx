@@ -30,6 +30,7 @@ import {
   getCurrentUser,
   getNeedsAction,
   getOrgMoneySummary,
+  getSpaces,
   NOW,
 } from "@/lib/data/queries";
 import { formatNaira } from "@/lib/money";
@@ -45,12 +46,13 @@ function greeting(now: Date) {
 }
 
 export default async function OverviewPage() {
-  const [org, user, money, campaigns, needsAction] = await Promise.all([
+  const [org, user, money, campaigns, needsAction, spaces] = await Promise.all([
     getCurrentOrg(),
     getCurrentUser(),
     getOrgMoneySummary(),
     getCampaignSummaries(),
     getNeedsAction(),
+    getSpaces(),
   ]);
 
   const firstName = user.name.split(" ")[0];
@@ -99,6 +101,71 @@ export default async function OverviewPage() {
             },
           ]}
         />
+
+        {/* A first visit has no campaigns, no money and no decisions, so the
+            panels below are all empty — and an empty dashboard reads as a
+            broken one. Three steps, in the order they must happen. */}
+        {campaigns.length === 0 && (
+          <Panel accent className="mb-5">
+            <PanelHeader>
+              <PanelTitle>Your first campaign, in three steps</PanelTitle>
+            </PanelHeader>
+            <ol className="divide-y divide-line">
+              {[
+                {
+                  n: 1,
+                  title:
+                    org.type === "agency" && spaces[0]
+                      ? `Add funds to ${spaces[0].name}'s wallet`
+                      : "Add funds",
+                  body: "By card, or record a bank transfer you have already received. Nothing is sent to a creator until the money is there.",
+                  href: "/wallet/deposit",
+                  cta: "Add funds",
+                  done: money.walletsKobo > 0,
+                },
+                {
+                  n: 2,
+                  title: "Write the brief",
+                  body: "In plain words. The AI turns it into the checks every draft is measured against.",
+                  href: "/campaigns/new",
+                  cta: "New campaign",
+                  done: false,
+                },
+                {
+                  n: 3,
+                  title: "Approve the shortlist",
+                  body: "You see why each creator was picked. Nobody is contacted until you say so.",
+                  href: "/campaigns/new",
+                  cta: "",
+                  done: false,
+                },
+              ].map((step) => (
+                <li
+                  key={step.n}
+                  className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center"
+                >
+                  <span
+                    className={cn(
+                      "grid size-7 shrink-0 place-items-center rounded-full text-[13px] font-semibold",
+                      step.done ? "bg-ok text-white" : "bg-ground text-ink",
+                    )}
+                  >
+                    {step.done ? "✓" : step.n}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14px] font-medium">{step.title}</span>
+                    <span className="block text-[12.5px] text-ink-2">{step.body}</span>
+                  </span>
+                  {!step.done && step.cta && (
+                    <Button size="sm" variant={step.n === 1 ? "default" : "outline"} asChild>
+                      <Link href={step.href}>{step.cta}</Link>
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </Panel>
+        )}
 
         {/* The only thing on this page that asks for a decision. */}
         <Panel accent className="mb-5">
@@ -164,7 +231,7 @@ export default async function OverviewPage() {
           </PanelHeader>
 
           <TableWrap>
-            <Table>
+            <Table labels={["Campaign", "Stage", "Creators", "In escrow", "Paid out"]}>
               <THead>
                 <TR className="hover:bg-transparent">
                   <TH className="w-[32%]">Campaign</TH>

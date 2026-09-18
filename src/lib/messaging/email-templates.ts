@@ -660,3 +660,166 @@ export function dealAgreedEmail(args: DealAgreedEmailArgs): EmailContent {
     }),
   };
 }
+
+/* ==========================================================================
+   Welcome — the first email an agency gets
+   ========================================================================== */
+
+/**
+ * Sent when the company is created, not when the account is.
+ *
+ * The account alone is nothing; the moment they have a client space and a
+ * wallet is the moment there is something to do. Three steps, in the order
+ * they have to happen, because "explore the platform" is what every welcome
+ * email says and none of them are read.
+ */
+export function welcomeEmail(args: {
+  firstName: string;
+  orgName: string;
+  isAgency: boolean;
+  dashboardUrl: string;
+}): EmailContent {
+  const steps = args.isAgency
+    ? [
+        ["Add a client", "Each client gets its own wallet. Their money is never pooled with another's."],
+        ["Add funds", "By card, or record a bank transfer you have already received. Nothing is sent to a creator until this is done."],
+        ["Write the brief", "In plain words. The AI turns it into the checks every draft is measured against."],
+      ]
+    : [
+        ["Add funds", "By card, or record a bank transfer. Nothing is sent to a creator until this is done."],
+        ["Write the brief", "In plain words. The AI turns it into the checks every draft is measured against."],
+        ["Approve the shortlist", "You see why each creator was picked, and nobody is contacted until you say so."],
+      ];
+
+  const body = `
+            <p style="margin:0 0 6px;font-size:15px;line-height:1.55;color:${INK};">
+              Hi ${args.firstName},
+            </p>
+            <p style="margin:0 0 22px;font-size:15px;line-height:1.55;color:${INK_2};">
+              ${args.orgName} is set up. Here is the whole of what happens next.
+            </p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              ${steps
+                .map(
+                  ([title, detail], i) => `<tr>
+                <td style="padding:0 0 16px;vertical-align:top;width:36px;">
+                  <span style="display:inline-block;width:26px;height:26px;line-height:26px;border-radius:13px;background:${GROUND};text-align:center;font-size:13px;font-weight:600;color:${INK};">${i + 1}</span>
+                </td>
+                <td style="padding:0 0 16px;vertical-align:top;">
+                  <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:${INK};">${title}</p>
+                  <p style="margin:0;font-size:13.5px;line-height:1.5;color:${INK_2};">${detail}</p>
+                </td>
+              </tr>`,
+                )
+                .join("")}
+            </table>
+            ${button(args.dashboardUrl, "Open your dashboard")}
+            <p style="margin:22px 0 0;font-size:13.5px;line-height:1.55;color:${INK_2};">
+              One promise underneath all of it: no creator is contacted until the
+              money for them is already held. That is why they answer.
+            </p>`;
+
+  const text = [
+    `Hi ${args.firstName},`,
+    ``,
+    `${args.orgName} is set up. Here is what happens next:`,
+    ``,
+    ...steps.map(([t, d], i) => `${i + 1}. ${t} — ${d}`),
+    ``,
+    `Open your dashboard: ${args.dashboardUrl}`,
+    ``,
+    `No creator is contacted until the money for them is already held. That is why they answer.`,
+  ].join("\n");
+
+  return {
+    subject: `${args.orgName} is set up on SubSquad`,
+    text,
+    html: shell({ preheader: "Three steps to your first campaign.", body }),
+  };
+}
+
+/* ==========================================================================
+   Closed — declined by the brand, or the campaign cancelled
+   ========================================================================== */
+
+/**
+ * The email nobody wants to send, so nobody did.
+ *
+ * "Declined. The creator has been told." was the message on the button, and
+ * nothing was sent. The creator's link went on saying "the brand has been told
+ * and will reply here — we will email you either way", and the deal sat in
+ * their list forever. A no is a small thing; silence is what makes people
+ * stop trusting the platform.
+ *
+ * No fee here. There is no money in this email, so there is nothing to lead
+ * with, and quoting a figure that will not be paid reads as taunting.
+ */
+export function dealClosedEmail(args: {
+  creatorFirstName: string;
+  brandName: string;
+  campaignName: string;
+  reason: "declined" | "cancelled";
+  /** The brand's own words, if they gave any. Shown as theirs. */
+  note?: string | null;
+}): EmailContent {
+  const note = args.note?.trim();
+  const declined = args.reason === "declined";
+
+  const headline = declined
+    ? `${args.brandName} has decided not to go ahead with ${args.campaignName}.`
+    : `${args.brandName} has cancelled ${args.campaignName} before it started.`;
+
+  const consequence = declined
+    ? "Nothing is owed and nothing is needed from you. There is no work to do and no link to open."
+    : "The invitation you were sent no longer stands, and nothing is needed from you. If you had started on anything, stop — nobody will be paid for it, and we would rather you kept your time.";
+
+  const noteBlock = note
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${GROUND};border-radius:10px;margin:0 0 16px;">
+              <tr>
+                <td style="padding:14px 16px;">
+                  <p style="margin:0 0 4px;font-size:12px;color:${INK_3};">From ${args.brandName}</p>
+                  <p style="margin:0;font-size:14px;line-height:1.55;color:${INK_2};">${note}</p>
+                </td>
+              </tr>
+            </table>`
+    : "";
+
+  const body = `
+            <p style="margin:0 0 6px;font-size:15px;line-height:1.55;color:${INK};">
+              Hi ${args.creatorFirstName},
+            </p>
+            <p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:${INK};">
+              ${headline}
+            </p>
+            ${noteBlock}
+            <p style="margin:0 0 16px;font-size:14px;line-height:1.55;color:${INK_2};">
+              ${consequence}
+            </p>
+            <p style="margin:0;font-size:14px;line-height:1.55;color:${INK_2};">
+              Your profile stays on SubSquad. The next brief that fits you will find you.
+            </p>`;
+
+  const text = [
+    `Hi ${args.creatorFirstName},`,
+    ``,
+    headline,
+    ...(note ? [``, `From ${args.brandName}: ${note}`] : []),
+    ``,
+    consequence,
+    ``,
+    `Your profile stays on SubSquad. The next brief that fits you will find you.`,
+  ].join("\n");
+
+  return {
+    subject: declined
+      ? `${args.brandName} will not be going ahead`
+      : `${args.brandName} has cancelled ${args.campaignName}`,
+    text,
+    html: shell({
+      preheader: declined
+        ? "No deal this time. Nothing is needed from you."
+        : "The campaign was cancelled. Nothing is needed from you.",
+      body,
+    }),
+  };
+}

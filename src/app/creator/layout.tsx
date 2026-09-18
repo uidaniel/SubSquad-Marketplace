@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { LogOut } from "lucide-react";
 import { CreatorTabBar } from "@/components/creator/tab-bar";
+import { signOut } from "@/app/(auth)/actions";
 
 /**
  * The creator app.
@@ -23,6 +25,16 @@ export default function CreatorLayout({
             </span>
             <span className="text-[15px] font-semibold">SubSquad</span>
           </Link>
+          {/* Creators have accounts now, so they need a way out of one — on a
+              shared or borrowed phone especially. */}
+          <form action={signOut} className="ml-auto">
+            <button
+              type="submit"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-sm)] px-2 text-[12.5px] font-medium text-ink-2 hover:bg-surface hover:text-ink"
+            >
+              <LogOut className="size-3.5" /> Sign out
+            </button>
+          </form>
         </div>
       </header>
 

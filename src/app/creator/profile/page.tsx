@@ -2,8 +2,11 @@ import { Building2, ExternalLink, ShieldCheck } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ScoreBadge } from "@/components/app/status";
-import { getCreatorMoney, getCurrentCreator } from "@/lib/data/creator-queries";
-import { DEMO_PROFILES, DEMO_SCORES } from "@/lib/demo/data";
+import {
+  getCreatorMoney,
+  getCreatorProfileAndScore,
+  getCurrentCreator,
+} from "@/lib/data/creator-queries";
 import { formatNaira } from "@/lib/money";
 import { formatCount, formatPercent } from "@/lib/utils";
 import { NoCreatorSession } from "@/app/creator/no-session";
@@ -15,14 +18,14 @@ export const metadata = { title: "Your profile" };
 export default async function CreatorProfilePage() {
   const creator = await getCurrentCreator();
   if (!creator) return <NoCreatorSession what="your profile" />;
-  const [money, banks] = await Promise.all([
+  const [money, banks, { profile, score }] = await Promise.all([
     getCreatorMoney(creator.id),
     // Falls back to the common list when Paystack is unreachable, so the
     // form still works rather than offering an empty dropdown.
     listBanks().catch(() => COMMON_BANKS),
+    // Theirs, not a fixture's. This read the demo data in live mode.
+    getCreatorProfileAndScore(creator.id),
   ]);
-  const profile = DEMO_PROFILES.find((p) => p.creatorId === creator.id);
-  const score = DEMO_SCORES.find((s) => s.creatorId === creator.id);
 
   return (
     <>
@@ -121,7 +124,7 @@ export default async function CreatorProfilePage() {
               verified={Boolean(creator.payoutVerified)}
             />
           </li>
-          <Row label="WhatsApp" value={creator.phone ?? "Not connected"} />
+          <Row label="Phone" value={creator.phone ?? "Not added"} />
           <Row
             label={profile?.platform === "tiktok" ? "TikTok" : "Instagram"}
             value={`@${creator.handle} · ${formatCount(profile?.followers ?? 0)}`}

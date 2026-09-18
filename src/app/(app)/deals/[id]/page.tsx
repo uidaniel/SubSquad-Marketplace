@@ -18,6 +18,9 @@ import { cn, formatCount, formatDate, formatPercent, formatRelative } from "@/li
 import { approveDraft, verifyPublished } from "../../actions";
 import { RateDecisions } from "../../approvals/rate-decisions";
 import { getPendingRates } from "../../rate-actions";
+import { STAGE_META, stageOf } from "@/lib/deals/stages";
+import { creatorUrl } from "@/lib/domains";
+import { CopyLink } from "@/components/app/copy-link";
 
 export const metadata = { title: "Deal" };
 
@@ -209,9 +212,30 @@ export default async function DealPage({
                 </PanelBody>
               </Panel>
             ) : (
+              /* Say what is happening, not just that nothing has arrived.
+                 "Nothing submitted yet" is true at five different stages and
+                 useful at none of them. */
               <Panel>
-                <PanelBody className="py-12 text-center text-[13px] text-ink-3">
-                  Nothing submitted yet.
+                <PanelHeader>
+                  <PanelTitle>Content</PanelTitle>
+                </PanelHeader>
+                <PanelBody className="space-y-2 py-6">
+                  <p className="text-[14px] font-medium">
+                    {STAGE_META[stageOf(deal.status)].label}
+                  </p>
+                  <p className="text-[13.5px] leading-relaxed text-ink-2">
+                    {STAGE_META[stageOf(deal.status)].blurb}
+                  </p>
+                  {deal.deadline && (
+                    <p className="text-[12.5px] text-ink-3">
+                      First draft is due three days before the deadline —{" "}
+                      {formatDate(
+                        new Date(new Date(deal.deadline).getTime() - 3 * 86_400_000).toISOString(),
+                        NOW,
+                      )}
+                      .
+                    </p>
+                  )}
                 </PanelBody>
               </Panel>
             )}
@@ -307,9 +331,12 @@ export default async function DealPage({
           </Panel>
         </div>
 
-        <div className="mt-4 flex items-center gap-3 text-[12.5px] text-ink-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3">
           <Avatar name={creator.displayName} size="sm" />
-          Invite link: /i/{deal.inviteToken}
+          <CopyLink
+            label="Their link"
+            url={creatorUrl(`/i/${deal.inviteToken}`)}
+          />
         </div>
       </Page>
     </>

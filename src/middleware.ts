@@ -19,6 +19,9 @@ import { surfaceForHost } from "@/lib/domains";
 const PUBLIC_PREFIXES = [
   "/login",
   "/signup",
+  "/forgot-password",
+  "/reset-password", // reached with the session the recovery link created
+  "/legal",
   "/auth",
   "/i/", // creator invite links, opened from WhatsApp
   "/d/", // guest brand payment links

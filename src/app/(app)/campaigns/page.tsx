@@ -67,7 +67,7 @@ export default async function CampaignsPage() {
 
         <Panel>
           <TableWrap>
-            <Table>
+            <Table labels={["Campaign", "Stage", "Creators", "In escrow", "Paid out", ""]}>
               <THead>
                 <TR className="hover:bg-transparent">
                   <TH className="w-[30%]">Campaign</TH>

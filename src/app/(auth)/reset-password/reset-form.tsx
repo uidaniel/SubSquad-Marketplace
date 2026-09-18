@@ -1,59 +1,47 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
-import { signIn, type AuthResult } from "../actions";
+import { updatePassword, type AuthResult } from "../actions";
 
-function Submit({ children }: { children: React.ReactNode }) {
+function Submit() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" variant="brand" size="lg" block disabled={pending}>
       {pending && <Loader2 className="animate-spin" />}
-      {children}
+      Save and sign in
     </Button>
   );
 }
 
-export function LoginForm({ next }: { next: string }) {
-  const [state, action] = useActionState<AuthResult, FormData>(signIn, undefined);
+export function ResetPasswordForm() {
+  const [state, action] = useActionState<AuthResult, FormData>(updatePassword, undefined);
 
   return (
     <form action={action} className="space-y-4">
-      <input type="hidden" name="next" value={next} />
-
-      <Field label="Email" htmlFor="email">
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          autoFocus
-          required
-          placeholder="you@agency.ng"
-        />
-      </Field>
-
-      <Field
-        label="Password"
-        htmlFor="password"
-        action={
-          <Link
-            href="/forgot-password"
-            className="text-[12.5px] font-medium text-brand-ink hover:underline"
-          >
-            Forgot it?
-          </Link>
-        }
-      >
+      <Field label="New password" hint="At least 8 characters." htmlFor="password">
         <Input
           id="password"
           name="password"
           type="password"
-          autoComplete="current-password"
+          autoComplete="new-password"
+          minLength={8}
+          autoFocus
+          required
+          placeholder="••••••••"
+        />
+      </Field>
+
+      <Field label="Type it again" htmlFor="confirm">
+        <Input
+          id="confirm"
+          name="confirm"
+          type="password"
+          autoComplete="new-password"
+          minLength={8}
           required
           placeholder="••••••••"
         />
@@ -68,7 +56,7 @@ export function LoginForm({ next }: { next: string }) {
         </p>
       )}
 
-      <Submit>Sign in</Submit>
+      <Submit />
     </form>
   );
 }

@@ -60,7 +60,7 @@ export default async function CreatorsPage() {
             <PanelTitle>The index</PanelTitle>
           </PanelHeader>
           <TableWrap>
-            <Table>
+            <Table labels={["Creator", "Followers", "Engagement", "Score", "Status", "Deals", "Earned here"]}>
               <THead>
                 <TR className="hover:bg-transparent">
                   <TH className="w-[26%]">Creator</TH>

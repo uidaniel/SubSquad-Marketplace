@@ -15,6 +15,7 @@ export function Field({
   hint,
   error,
   htmlFor,
+  action,
   children,
   className,
 }: {
@@ -22,14 +23,19 @@ export function Field({
   hint?: string;
   error?: string;
   htmlFor?: string;
+  /** Something small on the label's right — "Forgot it?" beside Password. */
+  action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <label htmlFor={htmlFor} className="block text-[13px] font-medium">
-        {label}
-      </label>
+      <div className="flex items-baseline justify-between gap-3">
+        <label htmlFor={htmlFor} className="block text-[13px] font-medium">
+          {label}
+        </label>
+        {action}
+      </div>
       {hint && <p className="text-[12.5px] leading-snug text-ink-2">{hint}</p>}
       {children}
       {error && <p className="text-[12.5px] text-danger">{error}</p>}

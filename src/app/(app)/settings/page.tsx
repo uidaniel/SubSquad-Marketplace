@@ -12,6 +12,7 @@ import { formatBps } from "@/lib/money";
 import { formatDate } from "@/lib/utils";
 import { OrgSettingsForm } from "./org-form";
 import { InviteTeammate } from "./invite-teammate";
+import { SecurityPanel } from "./security-panel";
 
 export const metadata = { title: "Settings" };
 
@@ -176,6 +177,8 @@ export default async function SettingsPage() {
               ))}
             </ul>
           </Panel>
+
+          <SecurityPanel email={user.email} />
 
           <Panel>
             <PanelHeader>

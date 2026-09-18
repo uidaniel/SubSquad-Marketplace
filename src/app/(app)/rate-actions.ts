@@ -8,6 +8,7 @@ import { toBrief } from "@/lib/data/brief";
 import { creatorUrl } from "@/lib/domains";
 import { one } from "@/lib/data/relations";
 import { formatDate } from "@/lib/utils";
+import { notifyDealClosed } from "@/lib/deals/notify";
 
 export type ActionResult =
   | { ok: true; message: string }
@@ -37,6 +38,10 @@ export async function respondToRate(
     // Fails quietly: the rate is agreed either way, and a creator who does not
     // get the email still sees the deal on their dashboard.
     await sendDealAgreed(dealId).catch(() => {});
+  }
+  if (result.ok && decision.kind === "decline") {
+    // The button says "the creator has been told". This is what makes it true.
+    await notifyDealClosed(dealId, "declined", decision.note).catch(() => {});
   }
 
   revalidatePath("/approvals");

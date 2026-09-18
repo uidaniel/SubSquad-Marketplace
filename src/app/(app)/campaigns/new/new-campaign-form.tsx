@@ -323,13 +323,18 @@ export function NewCampaignForm({
               it thought they were deciding what every creator would be paid.
               They are deciding the most any one of them can be paid: creators
               name their own rate and negotiate under this line. */}
+          {/* The text is one child of the flex row, not several — a bare
+              <b> inside a flex container became its own column and the
+              sentence rendered as "This / is / the" stacked down the page. */}
           <p className="flex items-start gap-2 text-[12.5px] leading-relaxed text-ink-3">
             <Info className="mt-0.5 size-3.5 shrink-0" />
-            This is the <b className="font-medium text-ink-2">most</b> you will pay
-            one creator for this deliverable, not a fixed fee. Creators name their
-            own rate; you accept it, offer a different one, or decline. Nothing is
-            ever agreed above this line, and the totals below assume everyone
-            asks for the maximum.
+            <span>
+              This is the <b className="font-medium text-ink-2">most</b> you will
+              pay one creator for this deliverable, not a fixed fee. Creators name
+              their own rate; you accept it, offer a different one, or decline.
+              Nothing is ever agreed above this line, and the totals below assume
+              everyone asks for the maximum.
+            </span>
           </p>
         </PanelBody>
       </Panel>

@@ -109,7 +109,7 @@ export default async function ReportsPage() {
             <PanelTitle>By campaign</PanelTitle>
           </PanelHeader>
           <TableWrap>
-            <Table>
+            <Table labels={["Campaign", "Stage", "Creators", "Paid out", "In escrow", "Avg per creator"]}>
               <THead>
                 <TR className="hover:bg-transparent">
                   <TH className="w-[28%]">Campaign</TH>

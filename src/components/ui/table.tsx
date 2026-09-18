@@ -1,6 +1,25 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Column labels, so a row can become a card on a phone.
+ *
+ * Every data table was cut off at 390px: five columns do not fit, the wrapper
+ * scrolls sideways, and the visible part showed a campaign name wrapped over
+ * four lines beside a truncated number. Below `sm` a table now renders each
+ * row as a stacked card, each cell labelled with its column header.
+ *
+ * The labels reach the cells through CSS, not React: the table writes one
+ * scoped rule per column (`td:nth-child(n)::before { content: "…" }`). A
+ * context would have been the obvious way, and it does not exist in the
+ * Server Components runtime these tables render in; cloning children to
+ * inject a prop breaks the moment a row wraps its cells in a Fragment. A
+ * stylesheet cares about neither, and ships no JavaScript.
+ */
+function cssString(text: string): string {
+  return text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 /** Wrap a table in this so a narrow screen scrolls the table, not the page. */
 export function TableWrap({
   className,
@@ -11,13 +30,34 @@ export function TableWrap({
 
 export function Table({
   className,
+  labels,
   ...props
-}: React.TableHTMLAttributes<HTMLTableElement>) {
+}: React.TableHTMLAttributes<HTMLTableElement> & {
+  /** Column headers in order. Turns rows into cards below `sm`. */
+  labels?: readonly string[];
+}) {
+  // useId is one of the few hooks a Server Component may call.
+  const scope = React.useId().replace(/[^A-Za-z0-9_-]/g, "");
+  const rules = labels
+    ?.map(
+      (label, i) =>
+        `[data-cards="${scope}"]>tbody>tr>td:nth-child(${i + 1})::before{content:"${cssString(label)}"}`,
+    )
+    .join("");
+
   return (
-    <table
-      className={cn("w-full border-collapse text-[13.5px]", className)}
-      {...props}
-    />
+    <>
+      {rules && <style>{rules}</style>}
+      <table
+        data-cards={labels ? scope : undefined}
+        className={cn(
+          "w-full border-collapse text-[13.5px]",
+          labels && "table-cards",
+          className,
+        )}
+        {...props}
+      />
+    </>
   );
 }
 

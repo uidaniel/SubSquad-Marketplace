@@ -10,6 +10,7 @@ import {
 } from "@/lib/data/queries";
 import { formatNaira } from "@/lib/money";
 import { STAGE_META, stageOf } from "@/lib/deals/stages";
+import { getIsStaff } from "@/lib/auth/session";
 
 /**
  * The org shell.
@@ -23,7 +24,7 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [org, user, spaces, money, needsAction, pendingDrafts, deals] =
+  const [org, user, spaces, money, needsAction, pendingDrafts, deals, isStaff] =
     await Promise.all([
       getCurrentOrg(),
       getCurrentUser(),
@@ -32,6 +33,7 @@ export default async function AppLayout({
       getNeedsAction(),
       getPendingMessageDrafts(),
       getAllDeals(),
+      getIsStaff(),
     ]);
 
   // Only the count that means somebody is waiting on a person. A badge that
@@ -103,7 +105,8 @@ export default async function AppLayout({
         escrowNote={`${formatNaira(money.walletsKobo)} available in wallets`}
         userName={user.name}
         userRole={user.role === "owner" ? "Owner" : "Team"}
-        showOps={isAgency}
+        // Staff only. It was shown to every agency and 404'd for all of them.
+        showOps={isStaff}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">{children}</div>
     </div>

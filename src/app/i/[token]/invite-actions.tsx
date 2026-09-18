@@ -122,7 +122,7 @@ function CounterForm({
         <p className="text-[13.5px] text-ink-2">
           Sent. {rateBandMaxKobo !== null && parsed !== null && parsed <= rateBandMaxKobo
             ? "Counters in this range usually get an answer the same day."
-            : "Someone will look at it and come back to you on WhatsApp."}
+            : "Someone will look at it and come back to you by email."}
         </p>
         <button
           type="button"

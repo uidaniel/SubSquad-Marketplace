@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Panel, PanelBody, PanelHeader, PanelTitle } from "@/components/ui/panel";
-import { getCampaignSummaries, getCreators } from "@/lib/data/queries";
+import { getCampaignSummaries, getCreators, getSpaces } from "@/lib/data/queries";
 import { formatNaira } from "@/lib/money";
 import { formatCount } from "@/lib/utils";
 
@@ -43,10 +43,18 @@ export default async function SearchPage({
     );
   }
 
-  const [campaigns, creators] = await Promise.all([
+  const [campaigns, creators, spaces] = await Promise.all([
     getCampaignSummaries(),
     getCreators(),
+    getSpaces(),
   ]);
+
+  // The box says "campaigns, creators and clients". It searched two of them.
+  const matchedSpaces = spaces.filter(
+    (s) =>
+      s.name.toLowerCase().includes(query) ||
+      (s.category ?? "").toLowerCase().includes(query),
+  );
 
   const matchedCampaigns = campaigns.filter(
     (c) =>
@@ -61,7 +69,8 @@ export default async function SearchPage({
       (profile?.categoryTags ?? []).some((t) => t.toLowerCase().includes(query)),
   );
 
-  const total = matchedCampaigns.length + matchedCreators.length;
+  const total =
+    matchedCampaigns.length + matchedCreators.length + matchedSpaces.length;
 
   return (
     <Wrapper query={q ?? ""}>
@@ -110,6 +119,31 @@ export default async function SearchPage({
             </Panel>
           )}
 
+          {matchedSpaces.length > 0 && (
+            <Panel>
+              <PanelHeader>
+                <PanelTitle>Clients · {matchedSpaces.length}</PanelTitle>
+              </PanelHeader>
+              <div>
+                {matchedSpaces.map((space) => (
+                  <Link
+                    key={space.id}
+                    href="/spaces"
+                    className="flex items-center gap-3 border-t border-line px-5 py-3 first:border-t-0 hover:bg-ground"
+                  >
+                    <Avatar name={space.name} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-medium">{space.name}</span>
+                      {space.category && (
+                        <span className="block text-[12.5px] text-ink-2">{space.category}</span>
+                      )}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </Panel>
+          )}
+
           {matchedCreators.length > 0 && (
             <Panel>
               <PanelHeader>
@@ -119,7 +153,7 @@ export default async function SearchPage({
                 {matchedCreators.slice(0, 20).map(({ creator, profile, score }) => (
                   <Link
                     key={creator.id}
-                    href={`/creators?handle=${creator.handle}`}
+                    href={`/creators/${creator.id}`}
                     className="flex items-center gap-3 border-t border-line px-5 py-3 first:border-t-0 hover:bg-ground"
                   >
                     <Avatar name={creator.displayName} size="sm" />

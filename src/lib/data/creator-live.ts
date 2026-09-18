@@ -2,8 +2,13 @@ import "server-only";
 
 import { requireServiceClient } from "@/lib/supabase/service";
 import { one } from "@/lib/data/relations";
-import type { Brief, Campaign, Creator, Deal, Draft } from "@/lib/domain";
+import type { Brief, Campaign, Creator, Deal, Draft,
+  CreatorProfile,
+  CreatorScoreRecord,
+} from "@/lib/domain";
 import type { Kobo } from "@/lib/money";
+import { createClient } from "@/lib/supabase/server";
+import { toCreator, toProfile, toScore } from "./mappers";
 
 /**
  * The creator surface, against Postgres.
@@ -70,26 +75,6 @@ function toDeal(row: Record<string, unknown>): Deal {
   };
 }
 
-function toCreator(row: Record<string, unknown>): Creator {
-  return {
-    id: row.id as string,
-    displayName: row.display_name as string,
-    primaryPlatform: row.primary_platform as string,
-    handle: row.handle as string,
-    phone: (row.phone as string) ?? null,
-    email: (row.email as string) ?? null,
-    whatsappOptIn: Boolean(row.whatsapp_opt_in),
-    status: row.status as Creator["status"],
-    payoutBankCode: (row.payout_bank_code as string) ?? null,
-    payoutAccountNumber: (row.payout_account_number as string) ?? null,
-    payoutAccountName: (row.payout_account_name as string) ?? null,
-    payoutVerified: Boolean(row.payout_verified),
-    doNotContact: Boolean(row.do_not_contact),
-    contactSource: (row.contact_source as Creator["contactSource"]) ?? "manual",
-    userId: (row.user_id as string) ?? null,
-    lastContactedAt: (row.last_contacted_at as string) ?? null,
-  };
-}
 
 function toCampaign(row: Record<string, unknown>): Campaign {
   return {
@@ -339,11 +324,79 @@ export async function getSpaceName(spaceId: string): Promise<string> {
 /**
  * The signed-in creator.
  *
- * Null until creator sessions exist — creators currently authenticate by invite
- * token, which identifies a deal rather than a person. The callers that need a
- * creator all reach them through a token, so this returning null is honest
- * rather than broken.
+ * This returned null unconditionally, with a comment saying creator sessions
+ * did not exist yet. They do now: accepting an invite requires an account and
+ * ties `creators.user_id` to it. But the stub was never replaced, so every page
+ * under /creator told every visitor to "open the link we sent you" — including
+ * creators who had just signed up.
+ *
+ * Two ways to find them, in order:
+ *
+ *   1. By `user_id`, the proper link.
+ *   2. By email, for anyone who signed up before the link was being set. One
+ *      real creator already had — an account with no creator behind it, routed
+ *      into the agency's "tell us about your company" screen. When the emails
+ *      match and the creator row is unclaimed, it is claimed here, once, so the
+ *      next request takes the first path.
  */
 export async function getCurrentCreator(): Promise<Creator | null> {
-  return null;
+  const supabase = await createClient();
+  let user = null;
+  try {
+    user = (await supabase.auth.getUser()).data.user;
+  } catch {
+    return null;
+  }
+  if (!user) return null;
+
+  const db = requireServiceClient();
+
+  const { data: linked } = await db
+    .from("creators")
+    .select("*")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (linked) return toCreator(linked);
+
+  if (!user.email) return null;
+
+  const { data: unclaimed } = await db
+    .from("creators")
+    .select("*")
+    .ilike("email", user.email)
+    .is("user_id", null)
+    .limit(1)
+    .maybeSingle();
+  if (!unclaimed) return null;
+
+  await db
+    .from("creators")
+    .update({ user_id: user.id })
+    .eq("id", unclaimed.id)
+    .is("user_id", null);
+
+  return toCreator({ ...unclaimed, user_id: user.id });
+}
+
+/**
+ * A creator's own numbers.
+ *
+ * The profile page was reading DEMO_PROFILES and DEMO_SCORES in live mode, so a
+ * real creator opening "your public record" saw a fixture's followers and a
+ * fixture's fraud score. Their record is the thing brands book them on; it has
+ * to be theirs.
+ */
+export async function getCreatorProfileAndScore(creatorId: string): Promise<{
+  profile: CreatorProfile | null;
+  score: CreatorScoreRecord | null;
+}> {
+  const db = requireServiceClient();
+  const [{ data: profile }, { data: score }] = await Promise.all([
+    db.from("creator_profiles").select("*").eq("creator_id", creatorId).maybeSingle(),
+    db.from("creator_scores").select("*").eq("creator_id", creatorId).maybeSingle(),
+  ]);
+  return {
+    profile: profile ? toProfile(profile) : null,
+    score: score ? toScore(score) : null,
+  };
 }

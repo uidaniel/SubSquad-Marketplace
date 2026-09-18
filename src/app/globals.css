@@ -206,3 +206,60 @@
     transform: translateX(100%);
   }
 }
+
+/* ---- tables as cards on a phone ------------------------------------------
+   Applied by <Table labels={[...]}>. Above sm nothing here runs and the table
+   is a table. Below it, each row is a bordered card and each cell a labelled
+   line, with the label coming from the data-label the row injected. Cells the
+   layout already hides at this width stay hidden. */
+@media (max-width: 639px) {
+  .table-cards thead {
+    display: none;
+  }
+  .table-cards,
+  .table-cards tbody {
+    display: block;
+    width: 100%;
+  }
+  .table-cards tr {
+    display: block;
+    padding: 0.875rem 1.25rem;
+  }
+  .table-cards tr:hover {
+    background: transparent;
+  }
+  .table-cards td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.3rem 0;
+    text-align: right;
+  }
+  .table-cards td:first-child {
+    display: block;
+    padding-bottom: 0.5rem;
+    text-align: left;
+  }
+  .table-cards td:first-child::before {
+    display: none;
+  }
+  .table-cards td::before {
+    /* The text comes from the per-table rule <Table labels> writes. */
+    content: "";
+    flex-shrink: 0;
+    color: var(--color-ink-3);
+    font-size: 12px;
+    text-align: left;
+  }
+  .table-cards td.hidden {
+    display: none;
+  }
+  .table-cards td[colspan] {
+    display: block;
+    text-align: center;
+  }
+  .table-cards td[colspan]::before {
+    display: none;
+  }
+}

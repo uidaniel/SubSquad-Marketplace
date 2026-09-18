@@ -66,7 +66,7 @@ export default async function CreatorDealsPage() {
       <ul className="mt-2.5 space-y-2.5">
         {open.length === 0 && (
           <li className="rounded-[var(--radius-lg)] border border-line bg-surface px-5 py-10 text-center text-[13px] text-ink-3">
-            Nothing open right now. We will message you on WhatsApp when a brand
+            Nothing open right now. We will email you when a brand
             funds a deal for you.
           </li>
         )}

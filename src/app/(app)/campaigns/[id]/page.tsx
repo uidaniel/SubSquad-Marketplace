@@ -195,7 +195,7 @@ function CreatorsTab({ deals }: { deals: DealSummary[] }) {
         <PanelTitle>Creators on this campaign</PanelTitle>
       </PanelHeader>
       <TableWrap>
-        <Table>
+        <Table labels={["Creator", "Status", "Score", "Fee", "Due"]}>
           <THead>
             <TR className="hover:bg-transparent">
               <TH className="w-[30%]">Creator</TH>
@@ -468,7 +468,7 @@ function ResultsTab({
         <PanelTitle>Published content</PanelTitle>
       </PanelHeader>
       <TableWrap>
-        <Table>
+        <Table labels={["Creator", "Published", "Fee"]}>
           <THead>
             <TR className="hover:bg-transparent">
               <TH>Creator</TH>

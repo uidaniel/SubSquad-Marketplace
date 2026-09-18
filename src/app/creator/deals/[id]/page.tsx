@@ -193,8 +193,8 @@ export default async function CreatorDealPage({
       )}
 
       <p className="mt-6 text-center text-[12.5px] leading-relaxed text-ink-3">
-        Something wrong with this deal? Reply to any of our WhatsApp messages and a
-        person will answer.
+        Something wrong with this deal? Reply to any email from us and a person
+        will answer.
       </p>
     </>
   );

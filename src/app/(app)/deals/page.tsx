@@ -132,7 +132,7 @@ export default async function DealsPage({
           )}
 
           <TableWrap>
-            <Table>
+            <Table labels={["Creator", "Campaign", "Status", "Fee", "Due"]}>
               <THead>
                 <TR className="hover:bg-transparent">
                   <TH className="w-[32%]">Creator</TH>

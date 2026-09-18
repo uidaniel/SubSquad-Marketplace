@@ -34,6 +34,13 @@ import { cn, formatDate } from "@/lib/utils";
 export const metadata = { title: "Wallet" };
 
 /** Plain-English names for what the ledger calls each account kind. */
+/** Where the money went when the receiving account is not the org's to see. */
+const HIDDEN_DESTINATION: Record<string, string | undefined> = {
+  release: "Creator",
+  fee: "SubSquad fee",
+  payout: "Creator's bank",
+};
+
 const ACCOUNT_LABELS: Record<string, string> = {
   space_wallet: "Client wallet",
   campaign_escrow: "Campaign escrow",
@@ -128,7 +135,7 @@ export default async function WalletPage() {
               <PanelTitle>Every movement of money</PanelTitle>
             </PanelHeader>
             <TableWrap>
-              <Table>
+              <Table labels={["What happened", "Amount", "When"]}>
                 <THead>
                   <TR className="hover:bg-transparent">
                     <TH>What happened</TH>
@@ -143,11 +150,23 @@ export default async function WalletPage() {
                     </TableEmpty>
                   ) : (
                     transactions.map(({ transaction, accounts }) => {
-                      // A transaction's size is the total credited, which for a
-                      // balanced pair is the same as the total debited.
-                      const amount = transaction.entries
+                      // The org sees only its own side of some transactions.
+                      //
+                      // A release credits a creator's wallet and a platform fee
+                      // credits ours; neither account belongs to the org, so
+                      // RLS hides those entries and the visible credits sum to
+                      // zero. Summing credits alone printed "+₦0" on the two
+                      // rows that matter most. The size is whichever side is
+                      // visible; the direction is the org's — out if it left
+                      // their wallet, or if all they can see is money leaving.
+                      const credited = transaction.entries
                         .filter((e) => e.amountKobo > 0)
                         .reduce((s, e) => s + e.amountKobo, 0);
+                      const debited = transaction.entries
+                        .filter((e) => e.amountKobo < 0)
+                        .reduce((s, e) => s - e.amountKobo, 0);
+                      const amount = Math.max(credited, debited);
+
                       const fromIdx = transaction.entries.findIndex(
                         (e) => e.amountKobo < 0,
                       );
@@ -155,13 +174,12 @@ export default async function WalletPage() {
                         (e) => e.amountKobo > 0,
                       );
                       const from = ACCOUNT_LABELS[accounts[fromIdx]?.kind ?? ""];
-                      const to = ACCOUNT_LABELS[accounts[toIdx]?.kind ?? ""];
+                      const to =
+                        ACCOUNT_LABELS[accounts[toIdx]?.kind ?? ""] ??
+                        HIDDEN_DESTINATION[transaction.type];
 
-                      // Money that has left the wallet is written as a negative.
-                      // "Held in escrow" is still the client's money, but it is
-                      // no longer spendable, and the row should read that way.
                       const leftTheWallet =
-                        accounts[fromIdx]?.kind === "space_wallet";
+                        accounts[fromIdx]?.kind === "space_wallet" || credited === 0;
 
                       return (
                         <TR key={transaction.id}>

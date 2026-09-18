@@ -50,7 +50,7 @@ export function NewDealForm({ unfundedCount, cap }: { unfundedCount: number; cap
         <Input id="email" name="email" type="email" placeholder="marketing@brand.com" required />
       </Field>
 
-      <Field label="Their WhatsApp number" hint="Optional — we send one reminder." htmlFor="phone">
+      <Field label="Their phone number" hint="Optional — we send one reminder." htmlFor="phone">
         <Input id="phone" name="phone" type="tel" placeholder="+234" />
       </Field>
 

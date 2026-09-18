@@ -27,7 +27,8 @@ import { toBrief } from "../src/lib/data/brief";
 import { formatNaira } from "../src/lib/money";
 import { checkSendAllowed, chooseChannel } from "../src/lib/messaging/policy";
 import { integrations } from "../src/lib/env";
-import { acceptRate, counterRate, pendingRates } from "../src/lib/deals/rates";
+import { acceptRate, counterRate, declineRate, pendingRates } from "../src/lib/deals/rates";
+import { notifyDealClosed } from "../src/lib/deals/notify";
 import { getInviteByToken } from "../src/lib/data/creator-live";
 
 const db = requireServiceClient();
@@ -630,6 +631,44 @@ async function main() {
     );
   }
 
+
+  /* ---- 17. a refusal reaches the creator --------------------------------- */
+
+  // "Declined. The creator has been told." — and nothing was sent. The deal
+  // went to "declined", a row went into deal_messages, and the creator's own
+  // page kept saying we would email them either way. This is the email.
+  const { data: spareDeal } = await db
+    .from("deals")
+    .select("id, status")
+    .eq("campaign_id", campaign!.id)
+    .in("status", ["invited", "negotiating"])
+    .limit(1)
+    .maybeSingle();
+
+  if (!spareDeal) {
+    check("17. Declining tells the creator", true, "no open deal left to decline — skipped");
+  } else {
+    const declined = await declineRate(spareDeal.id, "Went with someone closer to the brief.");
+    const outcome = await notifyDealClosed(spareDeal.id, "declined", "Went with someone closer to the brief.");
+    const { data: after } = await db
+      .from("deals")
+      .select("status")
+      .eq("id", spareDeal.id)
+      .maybeSingle();
+    const { data: record } = await db
+      .from("deal_messages")
+      .select("id, body")
+      .eq("deal_id", spareDeal.id)
+      .ilike("body", "We will not be going ahead%")
+      .limit(1)
+      .maybeSingle();
+
+    check(
+      "17. Declining closes the deal, records it, and the creator is emailed",
+      declined.ok && after?.status === "declined" && Boolean(record) && outcome.sent,
+      `status ${after?.status}, on record: ${Boolean(record)}, email ${outcome.sent ? ("dryRun" in outcome && outcome.dryRun ? "sent (dry run)" : "sent") : `not sent: ${"reason" in outcome ? outcome.reason : "?"}`}`,
+    );
+  }
 
   console.log(
     `\n${failures === 0 ? "All steps passed." : `${failures} step(s) FAILED.`}\n`,
